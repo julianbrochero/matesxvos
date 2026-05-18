@@ -85,6 +85,8 @@ const months = [
 
 const chartColors = ["#111111", "#21a66a", "#d89b25", "#5f6c7b", "#ef6060", "#8b8b8b"];
 const LOW_STOCK_LIMIT = 5;
+const SELLERS = ["Julian", "Santiago"] as const;
+const SELLER_STORAGE_KEY = "matesxvos-last-seller";
 
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
@@ -825,7 +827,7 @@ function Sales() {
   const registerSale = useStockStore((state) => state.registerSale);
   const [productId, setProductId] = useState(products[0]?.id ?? "");
   const [quantity, setQuantity] = useState("1");
-  const [seller, setSeller] = useState("Juli");
+  const [seller, setSeller] = useState<(typeof SELLERS)[number]>("Julian");
   const [payment, setPayment] = useState("Mercado Pago");
   const [date, setDate] = useState(today());
   const [error, setError] = useState("");
@@ -840,6 +842,13 @@ function Sales() {
   const revenue = (selected?.price ?? 0) * quantityValue;
   const cost = (selected?.cost ?? 0) * quantityValue;
   const profit = revenue - cost;
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(SELLER_STORAGE_KEY);
+    if (SELLERS.includes(saved as (typeof SELLERS)[number])) {
+      setSeller(saved as (typeof SELLERS)[number]);
+    }
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -874,7 +883,21 @@ function Sales() {
             {products.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.stock} disp.</option>)}
           </Select>
           <Input label="Cantidad" required type="number" min={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
-          <Input label="Vendedor" value={seller} onChange={(event) => setSeller(event.target.value)} />
+          <Select
+            label="Vendedor"
+            value={seller}
+            onChange={(event) => {
+              const nextSeller = event.target.value as (typeof SELLERS)[number];
+              setSeller(nextSeller);
+              window.localStorage.setItem(SELLER_STORAGE_KEY, nextSeller);
+            }}
+          >
+            {SELLERS.map((sellerName) => (
+              <option key={sellerName} value={sellerName}>
+                {sellerName}
+              </option>
+            ))}
+          </Select>
           <Select label="Método de pago" value={payment} onChange={(event) => setPayment(event.target.value)}>
             <option>Mercado Pago</option>
             <option>Efectivo</option>
@@ -1089,7 +1112,7 @@ function Stats() {
   const movements = useStockStore((state) => state.movements);
   const metrics = useMetrics(products, movements);
   const productChart = products.map((product) => ({ name: product.brand, vendidos: product.sold, stock: product.stock }));
-  const sellerData = ["Juli", "Mica", "Sofi"].map((seller) => ({
+  const sellerData = SELLERS.map((seller) => ({
     seller,
     ventas: movements.filter((movement) => movement.seller === seller).reduce((sum, movement) => sum + movement.amount, 0) || Math.round(metrics.sales / 3),
   }));

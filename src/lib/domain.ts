@@ -58,7 +58,7 @@ export const seedMovements: Movement[] = [
     amount: 51000,
     profit: 15000,
     date: today(),
-    seller: "Juli",
+    seller: "Julian",
     payment: "Mercado Pago",
   },
   {
@@ -78,7 +78,7 @@ export const seedMovements: Movement[] = [
     amount: 31600,
     profit: 10000,
     date: "2026-05-16",
-    seller: "Mica",
+    seller: "Santiago",
     payment: "Efectivo",
   },
 ];

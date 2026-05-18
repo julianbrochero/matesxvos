@@ -94,7 +94,7 @@ def startup():
             )
             conn.execute(
                 "INSERT INTO movements (type, title, detail, amount, profit, date, seller, payment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                ("venta", "Venta registrada", "3 Baldo 1kg por Mercado Pago", 51000, 15000, str(date.today()), "Juli", "Mercado Pago"),
+                ("venta", "Venta registrada", "3 Baldo 1kg por Mercado Pago", 51000, 15000, str(date.today()), "Julian", "Mercado Pago"),
             )
 
 

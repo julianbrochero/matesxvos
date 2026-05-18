@@ -168,8 +168,8 @@ insert into public.movements (type, title, detail, amount, profit, date, seller,
 select *
 from (
   values
-    ('venta', 'Venta registrada', '3 Baldo 1kg por Mercado Pago', 51000, 15000, current_date, 'Juli', 'Mercado Pago'),
+    ('venta', 'Venta registrada', '3 Baldo 1kg por Mercado Pago', 51000, 15000, current_date, 'Julian', 'Mercado Pago'),
     ('compra', 'Ingreso de mercadería', '20 Playadito 1kg al stock', 144000, 0, current_date - 1, null, null),
-    ('venta', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Mica', 'Efectivo')
+    ('venta', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Santiago', 'Efectivo')
 ) as seed(type, title, detail, amount, profit, date, seller, payment)
 where not exists (select 1 from public.movements);
