@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   BarChart3,
   Boxes,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
@@ -639,7 +640,7 @@ function ProductModal({
 
   return (
     <Modal open={open} title={product ? "Editar producto" : "Agregar producto"} subtitle="Datos principales del catálogo" onClose={onClose}>
-      <form onSubmit={submit} className="grid gap-4">
+      <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Input label="Nombre" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
           <Input label="Marca" required value={form.brand} onChange={(event) => setForm({ ...form, brand: event.target.value })} />
@@ -679,7 +680,7 @@ function Purchases() {
     <motion.div variants={container} initial="hidden" animate="show" className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
       <motion.section variants={item} className="glass rounded-[1.75rem] p-5">
         <SectionTitle title="Nueva compra" subtitle="Ingresa mercadería y actualiza stock automáticamente" />
-        <form onSubmit={submit} className="mt-5 grid gap-4">
+        <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="mt-5 grid gap-4">
           <Select label="Producto" value={productId} onChange={(event) => { const next = products.find((product) => product.id === event.target.value); setProductId(event.target.value); setUnitCost(next?.cost ?? 0); }}>
             {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
           </Select>
@@ -723,6 +724,12 @@ function Sales() {
   const [payment, setPayment] = useState("Mercado Pago");
   const [date, setDate] = useState(today());
   const [error, setError] = useState("");
+  const [saleAlert, setSaleAlert] = useState<{
+    product: string;
+    quantity: number;
+    revenue: number;
+    profit: number;
+  } | null>(null);
   const selected = products.find((product) => product.id === productId);
   const revenue = (selected?.price ?? 0) * quantity;
   const cost = (selected?.cost ?? 0) * quantity;
@@ -731,14 +738,32 @@ function Sales() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     const ok = await registerSale({ productId, quantity, seller, payment, date });
-    setError(ok ? "" : "Stock insuficiente para registrar la venta.");
+    if (!ok) {
+      setError("Stock insuficiente para registrar la venta.");
+      setSaleAlert(null);
+      return;
+    }
+
+    setError("");
+    setSaleAlert({
+      product: selected?.name ?? "Producto",
+      quantity,
+      revenue,
+      profit,
+    });
   }
+
+  useEffect(() => {
+    if (!saleAlert) return;
+    const timeout = window.setTimeout(() => setSaleAlert(null), 4200);
+    return () => window.clearTimeout(timeout);
+  }, [saleAlert]);
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
       <motion.section variants={item} className="glass rounded-[1.75rem] p-5">
         <SectionTitle title="Nueva venta" subtitle="Baja stock, suma venta y calcula ganancia automáticamente" />
-        <form onSubmit={submit} className="mt-5 grid gap-4">
+        <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="mt-5 grid gap-4">
           <Select label="Producto" value={productId} onChange={(event) => setProductId(event.target.value)}>
             {products.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.stock} disp.</option>)}
           </Select>
@@ -763,6 +788,7 @@ function Sales() {
             Registrar venta
           </Button>
         </form>
+        <SaleSuccessToast alert={saleAlert} onClose={() => setSaleAlert(null)} />
       </motion.section>
       <motion.section variants={item} className="glass rounded-[1.75rem] p-5">
         <SectionTitle title="Resumen de venta" subtitle={selected ? selected.name : "Selecciona un producto"} />
@@ -785,6 +811,124 @@ function Sales() {
         </div>
       </motion.section>
     </motion.div>
+  );
+}
+
+function handleFormKeyboardNavigation(event: KeyboardEvent<HTMLFormElement>) {
+  const key = event.key;
+  if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Enter"].includes(key)) return;
+
+  const target = event.target as HTMLElement | null;
+  if (!target || target.closest("[data-keyboard-ignore='true']")) return;
+
+  const form = event.currentTarget;
+  const controls = Array.from(
+    form.querySelectorAll<HTMLElement>(
+      "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])",
+    ),
+  ).filter((control) => {
+    const rect = control.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && control.tabIndex !== -1;
+  });
+
+  const currentIndex = controls.indexOf(target);
+  if (currentIndex === -1) return;
+
+  if (key === "ArrowDown" || key === "ArrowRight") {
+    event.preventDefault();
+    controls[Math.min(controls.length - 1, currentIndex + 1)]?.focus();
+    return;
+  }
+
+  if (key === "ArrowUp" || key === "ArrowLeft") {
+    event.preventDefault();
+    controls[Math.max(0, currentIndex - 1)]?.focus();
+    return;
+  }
+
+  if (key !== "Enter") return;
+
+  const targetButton = target instanceof HTMLButtonElement;
+
+  if (targetButton) return;
+
+  const editableControls = controls.filter(isEditableFormControl);
+  const editableIndex = editableControls.findIndex((control) => control === target);
+
+  event.preventDefault();
+  if (editableIndex >= 0 && editableIndex < editableControls.length - 1) {
+    editableControls[editableIndex + 1]?.focus();
+    return;
+  }
+
+  form.requestSubmit();
+}
+
+function isEditableFormControl(
+  control: HTMLElement,
+): control is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement {
+  return (
+    control instanceof HTMLInputElement ||
+    control instanceof HTMLSelectElement ||
+    control instanceof HTMLTextAreaElement
+  );
+}
+
+function SaleSuccessToast({
+  alert,
+  onClose,
+}: {
+  alert: { product: string; quantity: number; revenue: number; profit: number } | null;
+  onClose: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {alert ? (
+        <motion.div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-x-3 top-4 z-50 mx-auto max-w-md rounded-[1.5rem] border border-gain/20 bg-white/90 p-4 shadow-premium backdrop-blur-2xl sm:left-auto sm:right-5 sm:mx-0"
+          initial={{ opacity: 0, y: -16, scale: 0.96, filter: "blur(8px)" }}
+          animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+          exit={{ opacity: 0, y: -10, scale: 0.96, filter: "blur(8px)" }}
+          transition={{ type: "spring", stiffness: 420, damping: 34 }}
+        >
+          <div className="flex items-start gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gain/10 text-gain">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-ink">Venta registrada</p>
+                  <p className="mt-1 text-sm text-black/50">
+                    {alert.quantity} {alert.product}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-full p-1 text-black/35 transition-colors hover:bg-black/[0.04] hover:text-black"
+                  aria-label="Cerrar alerta"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-2xl bg-black/[0.035] px-3 py-2">
+                  <p className="text-xs text-black/40">Venta</p>
+                  <p className="font-semibold">{currency(alert.revenue)}</p>
+                </div>
+                <div className="rounded-2xl bg-gain/10 px-3 py-2 text-gain">
+                  <p className="text-xs text-gain/70">Ganancia</p>
+                  <p className="font-semibold">+{currency(alert.profit)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
