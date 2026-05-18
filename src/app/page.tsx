@@ -1046,8 +1046,15 @@ function Stats() {
 
 function Timeline({ movements, limit }: { movements?: ReturnType<typeof useStockStore.getState>["movements"]; limit?: number }) {
   const storeMovements = useStockStore((state) => state.movements);
+  const deleteMovement = useStockStore((state) => state.deleteMovement);
   const rows = (movements ?? storeMovements).slice(0, limit);
   if (!rows.length) return <EmptyState title="Sin movimientos" text="Todavía no hay actividad para mostrar." />;
+
+  async function removeMovement(movementId: string) {
+    const ok = window.confirm("Eliminar este movimiento del historial?");
+    if (!ok) return;
+    await deleteMovement(movementId);
+  }
 
   return (
     <div className="mt-5 grid gap-4">
@@ -1070,10 +1077,22 @@ function Timeline({ movements, limit }: { movements?: ReturnType<typeof useStock
             </div>
             <p className="mt-1 text-sm text-black/48">{movement.detail}</p>
           </div>
-          <div className="text-left sm:text-right">
-            <p className="font-semibold">{movement.amount ? currency(movement.amount) : "-"}</p>
-            <p className="text-xs text-black/42">{movement.date}</p>
-            {movement.profit ? <p className="mt-1 text-xs font-semibold text-gain">+{currency(movement.profit)}</p> : null}
+          <div className="flex items-start justify-between gap-3 sm:justify-end">
+            <div className="text-left sm:text-right">
+              <p className="font-semibold">{movement.amount ? currency(movement.amount) : "-"}</p>
+              <p className="text-xs text-black/42">{movement.date}</p>
+              {movement.profit ? <p className="mt-1 text-xs font-semibold text-gain">+{currency(movement.profit)}</p> : null}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0"
+              onClick={() => void removeMovement(movement.id)}
+              aria-label="Eliminar movimiento"
+            >
+              <Trash2 className="h-4 w-4 text-danger" />
+            </Button>
           </div>
         </motion.div>
       ))}

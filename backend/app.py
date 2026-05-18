@@ -174,6 +174,15 @@ def list_movements(kind: Literal["todos", "compra", "venta", "stock", "producto"
         return rows(conn.execute(query, params))
 
 
+@app.delete("/movements/{movement_id}")
+def delete_movement(movement_id: int):
+    with db() as conn:
+        cursor = conn.execute("DELETE FROM movements WHERE id = ?", (movement_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Movimiento no encontrado")
+        return {"ok": True}
+
+
 @app.get("/stats")
 def stats():
     with db() as conn:

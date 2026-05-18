@@ -33,6 +33,7 @@ type StockState = {
   updateStock: (id: string, stock: number) => Promise<void>;
   registerPurchase: (input: PurchaseInput) => Promise<void>;
   registerSale: (input: SaleInput) => Promise<boolean>;
+  deleteMovement: (id: string) => Promise<void>;
 };
 
 function id(prefix: string) {
@@ -302,6 +303,26 @@ export const useStockStore = create<StockState>()(
           if (!next) return false;
           set({ ...next, error: error instanceof Error ? error.message : "" });
           return true;
+        }
+      },
+      deleteMovement: async (movementId) => {
+        if (!get().remote) {
+          set((state) => ({
+            movements: state.movements.filter((movement) => movement.id !== movementId),
+          }));
+          return;
+        }
+
+        try {
+          await apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
+            method: "DELETE",
+          });
+          await get().hydrate();
+        } catch (error) {
+          set((state) => ({
+            movements: state.movements.filter((movement) => movement.id !== movementId),
+            error: error instanceof Error ? error.message : "",
+          }));
         }
       },
     }),
