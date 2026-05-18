@@ -2,7 +2,6 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   BarChart3,
   Boxes,
   CheckCircle2,
@@ -154,17 +153,17 @@ function Sidebar({
 }) {
   const content = (
     <motion.aside
-      className="glass flex h-full flex-col rounded-none border-y-0 border-l-0 px-3 py-4 lg:sticky lg:top-0 lg:h-screen lg:rounded-none"
-      animate={{ width: collapsed ? 86 : 286 }}
+      className="flex h-full flex-col border-r border-line bg-white/82 px-3 py-4 backdrop-blur-2xl lg:sticky lg:top-0 lg:h-screen"
+      animate={{ width: collapsed ? 78 : 248 }}
       transition={{ type: "spring", stiffness: 350, damping: 34 }}
     >
-      <div className="flex items-center justify-between gap-3 px-2">
+      <div className="flex items-center justify-between gap-2 px-1">
         <div className="flex min-w-0 items-center gap-3">
           <motion.div
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-ink text-white shadow-premium"
-            whileHover={{ rotate: -4, scale: 1.04 }}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-line bg-white text-ink shadow-sm"
+            whileHover={{ y: -1, scale: 1.02 }}
           >
-            <Sparkles className="h-5 w-5" />
+            <Sparkles className="h-4 w-4" />
           </motion.div>
           <AnimatePresence>
             {!collapsed ? (
@@ -175,7 +174,7 @@ function Sidebar({
                 exit={{ opacity: 0, x: -8 }}
               >
                 <p className="truncate text-sm font-semibold">Mates x Vos</p>
-                <p className="truncate text-xs text-black/45">Stock & ganancias</p>
+                <p className="truncate text-xs text-black/38">Stock premium</p>
               </motion.div>
             ) : null}
           </AnimatePresence>
@@ -185,7 +184,7 @@ function Sidebar({
         </Button>
       </div>
 
-      <nav className="mt-8 grid gap-2">
+      <nav className="mt-7 grid gap-1">
         {nav.map((entry) => {
           const Icon = entry.icon;
           const active = view === entry.id;
@@ -193,54 +192,57 @@ function Sidebar({
             <button
               key={entry.id}
               onClick={() => setView(entry.id)}
-              className="group relative flex h-12 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-black/55 transition-all duration-200 hover:bg-white hover:text-black hover:shadow-soft"
+              className={`group relative flex h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium transition-all duration-200 ${
+                active ? "text-ink" : "text-black/48 hover:bg-black/[0.035] hover:text-ink"
+              }`}
             >
               {active ? (
                 <motion.span
                   layoutId="active-nav"
-                  className="absolute inset-0 rounded-2xl bg-ink shadow-premium"
+                  className="absolute inset-0 rounded-2xl border border-line bg-black/[0.045]"
+                  transition={{ type: "spring", stiffness: 420, damping: 36 }}
+                />
+              ) : null}
+              {active ? (
+                <motion.span
+                  layoutId="active-nav-line"
+                  className="absolute left-0 h-5 w-1 rounded-full bg-ink"
                   transition={{ type: "spring", stiffness: 420, damping: 36 }}
                 />
               ) : null}
               <Icon
-                className={`relative h-5 w-5 transition-transform duration-200 group-hover:scale-110 ${
-                  active ? "text-white" : ""
+                className={`relative h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-105 ${
+                  active ? "text-ink" : ""
                 }`}
               />
               {!collapsed ? (
-                <span className={`relative truncate ${active ? "text-white" : ""}`}>{entry.label}</span>
+                <span className="relative truncate">{entry.label}</span>
               ) : null}
             </button>
           );
         })}
       </nav>
 
-      <div className="mt-auto hidden lg:block">
-        <div className="group relative overflow-hidden rounded-3xl border border-line bg-white/70 p-4 shadow-soft">
-          <BorderBeam />
-          {!collapsed ? (
-            <>
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                <Activity className="h-4 w-4 text-gain" />
-                Operación saludable
-              </div>
-              <p className="text-xs leading-5 text-black/48">
-                Ventas, stock y ganancias sincronizadas en una experiencia ligera.
-              </p>
-            </>
-          ) : (
-            <Activity className="mx-auto h-5 w-5 text-gain" />
-          )}
-        </div>
+      <div className="mt-auto hidden border-t border-line pt-3 lg:block">
         <Button
-          variant="secondary"
+          variant="ghost"
           size="icon"
-          className="mt-3 w-full"
+          className="w-full justify-center rounded-2xl text-black/50 hover:text-ink"
           onClick={() => setCollapsed(!collapsed)}
           aria-label="Contraer sidebar"
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
+        {!collapsed ? (
+          <motion.div
+            className="mt-3 flex items-center justify-center gap-2 px-2 text-xs text-black/38"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-gain" />
+            Listo para vender
+          </motion.div>
+        ) : null}
       </div>
     </motion.aside>
   );
@@ -251,7 +253,7 @@ function Sidebar({
       <AnimatePresence>
         {open ? (
           <motion.div
-            className="fixed inset-0 z-50 flex bg-black/20 backdrop-blur-xl lg:hidden"
+            className="fixed inset-0 z-50 flex bg-black/15 backdrop-blur-xl lg:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
