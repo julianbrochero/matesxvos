@@ -3,6 +3,8 @@
 .env*.local
 .next
 node_modules
+pnpm-lock.yaml
+pnpm-workspace.yaml
 backend/.venv
 backend/stock.db
 __pycache__
