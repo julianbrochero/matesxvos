@@ -163,7 +163,7 @@ function Sidebar({
             className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-line bg-white text-ink shadow-sm"
             whileHover={{ y: -1, scale: 1.02 }}
           >
-            <Sparkles className="h-4 w-4" />
+            <MateIcon className="h-5 w-5" />
           </motion.div>
           <AnimatePresence>
             {!collapsed ? (
@@ -270,6 +270,52 @@ function Sidebar({
         ) : null}
       </AnimatePresence>
     </>
+  );
+}
+
+function MateIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M8.3 9.2h7.4l-.64 6.16A4.12 4.12 0 0 1 10.96 19h-1.9a4.12 4.12 0 0 1-4.1-3.64L4.3 9.2Z"
+        stroke="currentColor"
+        strokeWidth="1.65"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7.3 9.2c.72-1.02 1.92-1.7 3.26-1.7h2.88c1.34 0 2.54.68 3.26 1.7"
+        stroke="currentColor"
+        strokeWidth="1.65"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M15.9 7.8 19.2 4"
+        stroke="currentColor"
+        strokeWidth="1.65"
+        strokeLinecap="round"
+      />
+      <path
+        d="M18.15 5.22 20 6.84"
+        stroke="currentColor"
+        strokeWidth="1.65"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8.25 12.35h5.5"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        opacity="0.55"
+      />
+    </svg>
   );
 }
 
