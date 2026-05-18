@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   BarChart3,
   Boxes,
@@ -49,6 +50,7 @@ import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { currency, compact, today } from "@/lib/utils";
 import { Product, useStockStore } from "@/lib/store";
+import logoImage from "@/logo.png";
 
 const nav = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -160,10 +162,15 @@ function Sidebar({
       <div className="flex items-center justify-between gap-2 px-1">
         <div className="flex min-w-0 items-center gap-3">
           <motion.div
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-line bg-white text-ink shadow-sm"
+            className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-2xl border border-line bg-white shadow-sm"
             whileHover={{ y: -1, scale: 1.02 }}
           >
-            <MateIcon className="h-5 w-5" />
+            <Image
+              src={logoImage}
+              alt="Mates x Vos"
+              className="h-8 w-8 object-contain"
+              priority
+            />
           </motion.div>
           <AnimatePresence>
             {!collapsed ? (
@@ -270,52 +277,6 @@ function Sidebar({
         ) : null}
       </AnimatePresence>
     </>
-  );
-}
-
-function MateIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M8.3 9.2h7.4l-.64 6.16A4.12 4.12 0 0 1 10.96 19h-1.9a4.12 4.12 0 0 1-4.1-3.64L4.3 9.2Z"
-        stroke="currentColor"
-        strokeWidth="1.65"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M7.3 9.2c.72-1.02 1.92-1.7 3.26-1.7h2.88c1.34 0 2.54.68 3.26 1.7"
-        stroke="currentColor"
-        strokeWidth="1.65"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M15.9 7.8 19.2 4"
-        stroke="currentColor"
-        strokeWidth="1.65"
-        strokeLinecap="round"
-      />
-      <path
-        d="M18.15 5.22 20 6.84"
-        stroke="currentColor"
-        strokeWidth="1.65"
-        strokeLinecap="round"
-      />
-      <path
-        d="M8.25 12.35h5.5"
-        stroke="currentColor"
-        strokeWidth="1.35"
-        strokeLinecap="round"
-        opacity="0.55"
-      />
-    </svg>
   );
 }
 
