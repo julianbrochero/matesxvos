@@ -25,7 +25,7 @@ export async function GET() {
   const sales = movements.filter((movement) => movement.type === "venta").reduce((sum, movement) => sum + movement.amount, 0);
   const profit = movements.filter((movement) => movement.type === "venta").reduce((sum, movement) => sum + movement.profit, 0);
   const stock = products.reduce((sum, product) => sum + product.stock, 0);
-  const lowStock = products.filter((product) => product.stock <= product.minStock);
+  const lowStock = products.filter((product) => product.stock <= 5);
   const topProduct = [...products].sort((a, b) => b.sold - a.sold)[0] ?? null;
 
   return NextResponse.json({ sales, profit, stock, lowStock, topProduct });

@@ -85,6 +85,7 @@ const months = [
 ];
 
 const chartColors = ["#111111", "#21a66a", "#d89b25", "#5f6c7b", "#ef6060", "#8b8b8b"];
+const LOW_STOCK_LIMIT = 5;
 
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
@@ -306,7 +307,7 @@ function Dashboard({ onNavigate }: { onNavigate: (view: View) => void }) {
   const movements = useStockStore((state) => state.movements);
   const metrics = useMetrics(products, movements);
   const topProduct = [...products].sort((a, b) => b.sold - a.sold)[0];
-  const lowProducts = products.filter((product) => product.stock <= product.minStock);
+  const lowProducts = products.filter(isLowStock);
 
   const cards = [
     { label: "Ventas totales", value: metrics.sales, icon: CircleDollarSign, format: currency, tone: "text-ink" },
@@ -459,8 +460,8 @@ function Products() {
     const matches = `${product.name} ${product.brand}`.toLowerCase().includes(search.toLowerCase());
     const status =
       filter === "todos" ||
-      (filter === "bajo" && product.stock <= product.minStock) ||
-      (filter === "ok" && product.stock > product.minStock);
+      (filter === "bajo" && isLowStock(product)) ||
+      (filter === "ok" && !isLowStock(product));
     return matches && status;
   });
   const pageSize = 5;
@@ -476,7 +477,7 @@ function Products() {
     <motion.div variants={container} initial="hidden" animate="show" className="grid gap-5">
       <motion.section variants={item} className="glass rounded-[1.75rem] p-4 sm:p-5">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <SectionTitle title="Productos" subtitle="Catálogo, costos, precios, stock mínimo y rentabilidad" />
+          <SectionTitle title="Productos" subtitle="Catálogo, costos, precios, stock y rentabilidad" />
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Agregar producto
@@ -616,26 +617,31 @@ function ProductModal({
   const [form, setForm] = useState({
     name: product?.name ?? "",
     brand: product?.brand ?? "",
-    cost: product?.cost ?? 0,
-    price: product?.price ?? 0,
-    stock: product?.stock ?? 0,
-    minStock: product?.minStock ?? 0,
+    cost: product ? String(product.cost) : "",
+    price: product ? String(product.price) : "",
+    stock: product ? String(product.stock) : "",
   });
 
   useEffect(() => {
     setForm({
       name: product?.name ?? "",
       brand: product?.brand ?? "",
-      cost: product?.cost ?? 0,
-      price: product?.price ?? 0,
-      stock: product?.stock ?? 0,
-      minStock: product?.minStock ?? 0,
+      cost: product ? String(product.cost) : "",
+      price: product ? String(product.price) : "",
+      stock: product ? String(product.stock) : "",
     });
   }, [product, open]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    onSubmit(form);
+    onSubmit({
+      name: form.name,
+      brand: form.brand,
+      cost: toPositiveNumber(form.cost),
+      price: toPositiveNumber(form.price),
+      stock: toNonNegativeInteger(form.stock),
+      minStock: product?.minStock ?? LOW_STOCK_LIMIT,
+    });
   }
 
   return (
@@ -644,10 +650,9 @@ function ProductModal({
         <div className="grid gap-4 sm:grid-cols-2">
           <Input label="Nombre" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
           <Input label="Marca" required value={form.brand} onChange={(event) => setForm({ ...form, brand: event.target.value })} />
-          <Input label="Costo de compra" required type="number" value={form.cost} onChange={(event) => setForm({ ...form, cost: Number(event.target.value) })} />
-          <Input label="Precio de venta" required type="number" value={form.price} onChange={(event) => setForm({ ...form, price: Number(event.target.value) })} />
-          <Input label="Stock actual" required type="number" value={form.stock} onChange={(event) => setForm({ ...form, stock: Number(event.target.value) })} />
-          <Input label="Stock mínimo" required type="number" value={form.minStock} onChange={(event) => setForm({ ...form, minStock: Number(event.target.value) })} />
+          <Input label="Costo de compra" required type="number" min={1} value={form.cost} onChange={(event) => setForm({ ...form, cost: event.target.value })} />
+          <Input label="Precio de venta" required type="number" min={1} value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} />
+          <Input label="Stock actual" required type="number" min={0} value={form.stock} onChange={(event) => setForm({ ...form, stock: event.target.value })} />
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
@@ -662,16 +667,18 @@ function Purchases() {
   const products = useStockStore((state) => state.products);
   const registerPurchase = useStockStore((state) => state.registerPurchase);
   const [productId, setProductId] = useState(products[0]?.id ?? "");
-  const [quantity, setQuantity] = useState(20);
-  const [unitCost, setUnitCost] = useState(products[0]?.cost ?? 0);
+  const [quantity, setQuantity] = useState("20");
+  const [unitCost, setUnitCost] = useState(products[0] ? String(products[0].cost) : "");
   const [date, setDate] = useState(today());
   const [loading, setLoading] = useState(false);
+  const quantityValue = toNonNegativeInteger(quantity);
+  const unitCostValue = toPositiveNumber(unitCost);
 
   function submit(event: FormEvent) {
     event.preventDefault();
     setLoading(true);
     window.setTimeout(async () => {
-      await registerPurchase({ productId, quantity, unitCost, date });
+      await registerPurchase({ productId, quantity: quantityValue, unitCost: unitCostValue, date });
       setLoading(false);
     }, 520);
   }
@@ -681,11 +688,11 @@ function Purchases() {
       <motion.section variants={item} className="glass rounded-[1.75rem] p-5">
         <SectionTitle title="Nueva compra" subtitle="Ingresa mercadería y actualiza stock automáticamente" />
         <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="mt-5 grid gap-4">
-          <Select label="Producto" value={productId} onChange={(event) => { const next = products.find((product) => product.id === event.target.value); setProductId(event.target.value); setUnitCost(next?.cost ?? 0); }}>
+          <Select label="Producto" value={productId} onChange={(event) => { const next = products.find((product) => product.id === event.target.value); setProductId(event.target.value); setUnitCost(next ? String(next.cost) : ""); }}>
             {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
           </Select>
-          <Input label="Cantidad" type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} />
-          <Input label="Costo unitario" type="number" min={1} value={unitCost} onChange={(event) => setUnitCost(Number(event.target.value))} />
+          <Input label="Cantidad" required type="number" min={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+          <Input label="Costo unitario" required type="number" min={1} value={unitCost} onChange={(event) => setUnitCost(event.target.value)} />
           <Input label="Fecha" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
           <Button disabled={loading} className="mt-2">
             {loading ? <LoadingDots /> : <PackagePlus className="h-4 w-4" />}
@@ -696,8 +703,8 @@ function Purchases() {
       <motion.section variants={item} className="glass rounded-[1.75rem] p-5">
         <SectionTitle title="Impacto estimado" subtitle="El gasto queda en historial y el stock sube al instante" />
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <ImpactCard icon={ReceiptText} label="Gasto total" value={currency(quantity * unitCost)} />
-          <ImpactCard icon={Layers3} label="Unidades a ingresar" value={`${quantity} unidades`} />
+          <ImpactCard icon={ReceiptText} label="Gasto total" value={currency(quantityValue * unitCostValue)} />
+          <ImpactCard icon={Layers3} label="Unidades a ingresar" value={`${quantityValue} unidades`} />
         </div>
         <div className="mt-6 rounded-3xl border border-line bg-white/70 p-4">
           <p className="text-sm font-semibold">Vista previa</p>
@@ -719,7 +726,7 @@ function Sales() {
   const products = useStockStore((state) => state.products);
   const registerSale = useStockStore((state) => state.registerSale);
   const [productId, setProductId] = useState(products[0]?.id ?? "");
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState("1");
   const [seller, setSeller] = useState("Juli");
   const [payment, setPayment] = useState("Mercado Pago");
   const [date, setDate] = useState(today());
@@ -731,13 +738,14 @@ function Sales() {
     profit: number;
   } | null>(null);
   const selected = products.find((product) => product.id === productId);
-  const revenue = (selected?.price ?? 0) * quantity;
-  const cost = (selected?.cost ?? 0) * quantity;
+  const quantityValue = toNonNegativeInteger(quantity);
+  const revenue = (selected?.price ?? 0) * quantityValue;
+  const cost = (selected?.cost ?? 0) * quantityValue;
   const profit = revenue - cost;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const ok = await registerSale({ productId, quantity, seller, payment, date });
+    const ok = await registerSale({ productId, quantity: quantityValue, seller, payment, date });
     if (!ok) {
       setError("Stock insuficiente para registrar la venta.");
       setSaleAlert(null);
@@ -747,7 +755,7 @@ function Sales() {
     setError("");
     setSaleAlert({
       product: selected?.name ?? "Producto",
-      quantity,
+      quantity: quantityValue,
       revenue,
       profit,
     });
@@ -767,7 +775,7 @@ function Sales() {
           <Select label="Producto" value={productId} onChange={(event) => setProductId(event.target.value)}>
             {products.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.stock} disp.</option>)}
           </Select>
-          <Input label="Cantidad" type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} />
+          <Input label="Cantidad" required type="number" min={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
           <Input label="Vendedor" value={seller} onChange={(event) => setSeller(event.target.value)} />
           <Select label="Método de pago" value={payment} onChange={(event) => setPayment(event.target.value)}>
             <option>Mercado Pago</option>
@@ -805,7 +813,7 @@ function Sales() {
           </div>
           <div className="grid grid-cols-3 px-4 py-4 text-sm">
             <span className="font-semibold">{selected?.name ?? "-"}</span>
-            <span>{quantity}</span>
+            <span>{quantityValue}</span>
             <span className="text-right font-semibold text-gain">{revenue ? Math.round((profit / revenue) * 100) : 0}%</span>
           </div>
         </div>
@@ -862,6 +870,16 @@ function handleFormKeyboardNavigation(event: KeyboardEvent<HTMLFormElement>) {
   }
 
   form.requestSubmit();
+}
+
+function toPositiveNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function toNonNegativeInteger(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
 }
 
 function isEditableFormControl(
@@ -983,7 +1001,7 @@ function Stats() {
       <motion.div variants={container} className="grid gap-4 sm:grid-cols-3">
         <motion.div variants={item}><ImpactCard icon={CircleDollarSign} label="Venta mensual" value={currency(metrics.sales)} /></motion.div>
         <motion.div variants={item}><ImpactCard icon={WalletCards} label="Ganancia mensual" value={currency(metrics.profit)} positive /></motion.div>
-        <motion.div variants={item}><ImpactCard icon={Boxes} label="Productos bajos" value={`${products.filter((p) => p.stock <= p.minStock).length}`} /></motion.div>
+        <motion.div variants={item}><ImpactCard icon={Boxes} label="Productos bajos" value={`${products.filter(isLowStock).length}`} /></motion.div>
       </motion.div>
       <div className="grid gap-5 xl:grid-cols-2">
         <motion.section variants={item} className="glass rounded-[1.75rem] p-5">
@@ -1089,8 +1107,8 @@ function ImpactCard({ icon: Icon, label, value, positive }: { icon: typeof Circl
 }
 
 function StockAlert({ product }: { product: Product }) {
-  const low = product.stock <= product.minStock;
-  const percent = Math.min(100, Math.round((product.stock / Math.max(product.minStock * 2, 1)) * 100));
+  const low = isLowStock(product);
+  const percent = Math.min(100, Math.round((product.stock / (LOW_STOCK_LIMIT * 2)) * 100));
   return (
     <motion.div
       className="rounded-3xl border border-line bg-white/76 p-4 shadow-sm"
@@ -1111,18 +1129,22 @@ function StockAlert({ product }: { product: Product }) {
           transition={{ duration: 0.7, ease: "easeOut" }}
         />
       </div>
-      <p className="mt-2 text-xs text-black/42">{product.stock} unidades · mínimo {product.minStock}</p>
+      <p className="mt-2 text-xs text-black/42">{product.stock} unidades · alerta bajo {LOW_STOCK_LIMIT}</p>
     </motion.div>
   );
 }
 
 function StockBadge({ product }: { product: Product }) {
-  const low = product.stock <= product.minStock;
+  const low = isLowStock(product);
   return (
     <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${low ? "bg-danger/10 text-danger" : "bg-gain/10 text-gain"}`}>
       {product.stock} u.
     </span>
   );
+}
+
+function isLowStock(product: Product) {
+  return product.stock <= LOW_STOCK_LIMIT;
 }
 
 function Badge({ children, danger }: { children: React.ReactNode; danger?: boolean }) {
