@@ -118,7 +118,7 @@ export default function Home() {
           <AnimatePresence mode="wait">
             <motion.section
               key={view}
-              className="mx-auto w-full max-w-[1480px] px-4 pb-10 pt-4 sm:px-6 lg:px-8"
+              className="mx-auto w-full max-w-[1480px] px-4 pb-10 pt-4 sm:px-6 xl:px-8"
               initial={{ opacity: 0, y: 14, filter: "blur(8px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               exit={{ opacity: 0, y: -10, filter: "blur(8px)" }}
@@ -155,25 +155,27 @@ function Sidebar({
 }) {
   const content = (
     <motion.aside
-      className="flex h-full flex-col border-r border-line bg-white/82 px-3 py-4 backdrop-blur-2xl lg:sticky lg:top-0 lg:h-screen"
-      animate={{ width: collapsed ? 78 : 190 }}
+      className="flex h-full flex-col border-r border-line bg-white/92 px-3 py-4 backdrop-blur-2xl xl:sticky xl:top-0 xl:h-screen"
+      animate={{ width: open ? 280 : collapsed ? 78 : 180 }}
       transition={{ type: "spring", stiffness: 350, damping: 34 }}
     >
       <div className="flex items-center justify-between gap-2 px-1">
         <div className="flex min-w-0 items-center">
           <motion.div
-            className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-2xl border border-line bg-white shadow-sm"
+            className={`grid shrink-0 place-items-center overflow-hidden rounded-2xl border border-line bg-white shadow-sm ${
+              open || !collapsed ? "h-12 w-16" : "h-11 w-11"
+            }`}
             whileHover={{ y: -1, scale: 1.02 }}
           >
             <Image
               src={logoImage}
               alt="Mates x Vos"
-              className="h-10 w-10 object-contain"
+              className="h-full w-full object-cover"
               priority
             />
           </motion.div>
         </div>
-        <Button variant="ghost" size="icon" className="lg:hidden" onClick={onClose} aria-label="Cerrar menú">
+        <Button variant="ghost" size="icon" className="xl:hidden" onClick={onClose} aria-label="Cerrar menú">
           <X className="h-5 w-5" />
         </Button>
       </div>
@@ -209,7 +211,7 @@ function Sidebar({
                   active ? "text-ink" : ""
                 }`}
               />
-              {!collapsed ? (
+              {open || !collapsed ? (
                 <span className="relative truncate">{entry.label}</span>
               ) : null}
             </button>
@@ -217,7 +219,7 @@ function Sidebar({
         })}
       </nav>
 
-      <div className="mt-auto hidden border-t border-line pt-3 lg:block">
+      <div className="mt-auto hidden border-t border-line pt-3 xl:block">
         <Button
           variant="ghost"
           size="icon"
@@ -243,11 +245,11 @@ function Sidebar({
 
   return (
     <>
-      <div className="hidden lg:block">{content}</div>
+      <div className="hidden xl:block">{content}</div>
       <AnimatePresence>
         {open ? (
           <motion.div
-            className="fixed inset-0 z-50 flex bg-black/15 backdrop-blur-xl lg:hidden"
+            className="fixed inset-0 z-50 flex bg-black/15 backdrop-blur-xl xl:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -274,18 +276,18 @@ function Header({ view, onMenu }: { view: View; onMenu: () => void }) {
   const movements = useStockStore((state) => state.movements);
   const metrics = useMetrics(products, movements);
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-white/72 px-4 py-3 backdrop-blur-2xl sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 border-b border-line bg-white/72 px-4 py-3 backdrop-blur-2xl sm:px-6 xl:px-8">
       <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Button variant="secondary" size="icon" className="lg:hidden" onClick={onMenu} aria-label="Abrir menú">
+          <Button variant="secondary" size="icon" className="xl:hidden" onClick={onMenu} aria-label="Abrir menú">
             <Menu className="h-5 w-5" />
           </Button>
           <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-black/38">Sistema premium</p>
-            <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{active?.label}</h1>
+            <p className="truncate text-[0.68rem] font-medium uppercase tracking-[0.18em] text-black/38 sm:text-xs sm:tracking-[0.22em]">Sistema premium</p>
+            <h1 className="truncate text-lg font-semibold tracking-tight sm:text-2xl">{active?.label}</h1>
           </div>
         </div>
-        <div className="hidden items-center gap-2 sm:flex">
+        <div className="hidden items-center gap-2 md:flex">
           <div className="rounded-full border border-line bg-white/70 px-3 py-2 text-xs font-medium text-black/50 shadow-sm">
             Hoy, {new Intl.DateTimeFormat("es-AR", { dateStyle: "medium" }).format(new Date())}
           </div>
@@ -364,10 +366,10 @@ function Dashboard({ onNavigate }: { onNavigate: (view: View) => void }) {
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="grid gap-5">
-      <motion.div variants={item} className="grid gap-4 lg:grid-cols-[1.45fr_0.55fr]">
-        <section className="group relative overflow-hidden rounded-[2rem] border border-line bg-white/80 p-5 shadow-premium backdrop-blur-2xl sm:p-7">
+      <motion.div variants={item} className="grid gap-4 2xl:grid-cols-[1.45fr_0.55fr]">
+        <section className="group relative overflow-hidden rounded-[1.5rem] border border-line bg-white/80 p-5 shadow-premium backdrop-blur-2xl sm:rounded-[2rem] sm:p-7">
           <BorderBeam />
-          <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+          <div className="flex flex-col justify-between gap-6 2xl:flex-row 2xl:items-end">
             <div>
               <motion.div
                 className="mb-4 inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-xs font-semibold text-black/55 shadow-sm"
@@ -376,7 +378,7 @@ function Dashboard({ onNavigate }: { onNavigate: (view: View) => void }) {
                 <span className="h-2 w-2 rounded-full bg-gain shadow-[0_0_0_5px_rgba(33,166,106,0.12)]" />
                 Negocio activo
               </motion.div>
-              <h2 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-5xl">
+              <h2 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl 2xl:text-5xl">
                 Control premium de stock, ventas y ganancias de yerbas.
               </h2>
               <p className="mt-4 max-w-xl text-sm leading-6 text-black/52 sm:text-base">
@@ -395,10 +397,10 @@ function Dashboard({ onNavigate }: { onNavigate: (view: View) => void }) {
             </div>
           </div>
         </section>
-        <section className="group relative overflow-hidden rounded-[2rem] border border-line bg-ink p-5 text-white shadow-premium sm:p-6">
+        <section className="group relative overflow-hidden rounded-[1.5rem] border border-line bg-ink p-5 text-white shadow-premium sm:rounded-[2rem] sm:p-6">
           <BorderBeam />
           <p className="text-sm text-white/55">Margen promedio</p>
-          <div className="mt-3 text-5xl font-semibold tracking-tight">
+          <div className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
             <NumberTicker value={metrics.margin} format={(v) => `${Math.round(v)}%`} />
           </div>
           <p className="mt-4 text-sm leading-6 text-white/55">
@@ -418,7 +420,7 @@ function Dashboard({ onNavigate }: { onNavigate: (view: View) => void }) {
         </section>
       </motion.div>
 
-      <motion.div variants={container} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <motion.div variants={container} className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
@@ -522,14 +524,14 @@ function Products() {
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="grid gap-5">
       <motion.section variants={item} className="glass rounded-[1.75rem] p-4 sm:p-5">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+          <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
           <SectionTitle title="Productos" subtitle="Catálogo, costos, precios, stock y rentabilidad" />
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Agregar producto
           </Button>
         </div>
-        <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_220px]">
+        <div className="mt-5 grid gap-3 xl:grid-cols-[1fr_220px]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
             <Input className="pl-11" placeholder="Buscar por nombre o marca..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
@@ -543,7 +545,7 @@ function Products() {
       </motion.section>
 
       <motion.section variants={item} className="glass overflow-hidden rounded-[1.75rem]">
-        <div className="hidden overflow-x-auto lg:block">
+        <div className="hidden overflow-x-auto xl:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-line bg-black/[0.02] text-xs uppercase tracking-[0.16em] text-black/40">
@@ -587,7 +589,7 @@ function Products() {
           </table>
         </div>
 
-        <div className="grid gap-3 p-3 lg:hidden">
+        <div className="grid gap-3 p-3 xl:hidden">
           {visible.map((product) => (
             <motion.div
               key={product.id}
@@ -730,7 +732,7 @@ function Purchases() {
   }
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+    <motion.div variants={container} initial="hidden" animate="show" className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
       <motion.section variants={item} className="glass rounded-[1.75rem] p-5">
         <SectionTitle title="Nueva compra" subtitle="Ingresa mercadería y actualiza stock automáticamente" />
         <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="mt-5 grid gap-4">
@@ -1008,9 +1010,9 @@ function History() {
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="grid gap-5">
       <motion.section variants={item} className="glass rounded-[1.75rem] p-5">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+        <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
           <SectionTitle title="Historial" subtitle="Timeline de compras, ventas, ganancias y movimientos de stock" />
-          <div className="grid gap-3 sm:grid-cols-[1fr_180px] lg:w-[520px]">
+          <div className="grid gap-3 sm:grid-cols-[1fr_180px] xl:w-[520px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
               <Input className="pl-11" placeholder="Buscar movimiento..." value={query} onChange={(event) => setQuery(event.target.value)} />
