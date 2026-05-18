@@ -322,6 +322,9 @@ function MateIcon({ className }: { className?: string }) {
 function Header({ view, onMenu }: { view: View; onMenu: () => void }) {
   const active = nav.find((entry) => entry.id === view);
   const remote = useStockStore((state) => state.remote);
+  const products = useStockStore((state) => state.products);
+  const movements = useStockStore((state) => state.movements);
+  const metrics = useMetrics(products, movements);
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-white/72 px-4 py-3 backdrop-blur-2xl sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-3">
@@ -341,13 +344,60 @@ function Header({ view, onMenu }: { view: View; onMenu: () => void }) {
           <div className="rounded-full border border-line bg-white/70 px-3 py-2 text-xs font-semibold text-black/50 shadow-sm">
             {remote ? "Supabase" : "Local"}
           </div>
-          <Button variant="secondary" size="icon" aria-label="Exportar">
+          <Button
+            variant="secondary"
+            size="icon"
+            onClick={() => downloadBusinessSnapshot({ products, movements, metrics, source: remote ? "supabase" : "local" })}
+            aria-label="Descargar backup"
+            title="Descargar backup"
+          >
             <Download className="h-4 w-4" />
           </Button>
         </div>
       </div>
     </header>
   );
+}
+
+function downloadBusinessSnapshot({
+  products,
+  movements,
+  metrics,
+  source,
+}: {
+  products: Product[];
+  movements: ReturnType<typeof useStockStore.getState>["movements"];
+  metrics: ReturnType<typeof useMetrics>;
+  source: "supabase" | "local";
+}) {
+  const generatedAt = new Date();
+  const payload = {
+    app: "Mates x Vos",
+    source,
+    generatedAt: generatedAt.toISOString(),
+    summary: {
+      totalSales: metrics.sales,
+      totalProfit: metrics.profit,
+      totalStock: metrics.stock,
+      marginPercent: Math.round(metrics.margin),
+      products: products.length,
+      movements: movements.length,
+    },
+    products,
+    movements,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const date = generatedAt.toISOString().slice(0, 10);
+  anchor.href = url;
+  anchor.download = `mates-x-vos-backup-${date}.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 function Dashboard({ onNavigate }: { onNavigate: (view: View) => void }) {
