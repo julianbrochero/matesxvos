@@ -158,13 +158,26 @@ function Sidebar({
       transition={{ type: "spring", stiffness: 350, damping: 34 }}
     >
       <div className="flex items-center justify-between gap-2 px-1">
-        <div className="flex min-w-0 items-center">
+        <div className="flex min-w-0 items-center gap-3">
           <motion.div
             className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-line bg-white text-ink shadow-sm"
             whileHover={{ y: -1, scale: 1.02 }}
           >
             <MateIcon className="h-5 w-5" />
           </motion.div>
+          <AnimatePresence>
+            {open || !collapsed ? (
+              <motion.div
+                className="min-w-0"
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -8 }}
+              >
+                <p className="truncate text-sm font-semibold">Mates x Vos</p>
+                <p className="truncate text-xs text-black/38">Stock premium</p>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
         <Button variant="ghost" size="icon" className="xl:hidden" onClick={onClose} aria-label="Cerrar menú">
           <X className="h-5 w-5" />
@@ -320,7 +333,7 @@ function Header({ view, onMenu }: { view: View; onMenu: () => void }) {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="min-w-0">
-            <p className="truncate text-[0.68rem] font-medium uppercase tracking-[0.18em] text-black/38 sm:text-xs sm:tracking-[0.22em]">Sistema premium</p>
+            <p className="truncate text-[0.68rem] font-medium uppercase tracking-[0.18em] text-black/38 sm:text-xs sm:tracking-[0.22em]">Mates x Vos</p>
             <h1 className="truncate text-lg font-semibold tracking-tight sm:text-2xl">{active?.label}</h1>
           </div>
         </div>
