@@ -8,6 +8,7 @@ const patchSchema = z
   .object({
     name: z.string().min(1).optional(),
     brand: z.string().min(1).optional(),
+    location: z.string().min(1).optional(),
     cost: z.coerce.number().positive().optional(),
     price: z.coerce.number().positive().optional(),
     stock: z.coerce.number().int().nonnegative().optional(),
@@ -34,6 +35,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const payload = toProductRow({
     name: parsed.data.name ?? "",
     brand: parsed.data.brand ?? "",
+    location: parsed.data.location ?? "",
     cost: parsed.data.cost ?? 1,
     price: parsed.data.price ?? 1,
     stock: parsed.data.stock ?? 0,

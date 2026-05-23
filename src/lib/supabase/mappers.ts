@@ -4,6 +4,7 @@ type ProductRow = {
   id: string;
   name: string;
   brand: string;
+  location?: string | null;
   cost: number | string;
   price: number | string;
   stock: number;
@@ -28,6 +29,7 @@ export function mapProduct(row: ProductRow): Product {
     id: row.id,
     name: row.name,
     brand: row.brand,
+    location: row.location || row.brand,
     cost: Number(row.cost),
     price: Number(row.price),
     stock: Number(row.stock),
@@ -53,6 +55,7 @@ export function mapMovement(row: MovementRow): Movement {
 export function toProductRow(product: {
   name: string;
   brand: string;
+  location: string;
   cost: number;
   price: number;
   stock: number;
@@ -61,6 +64,7 @@ export function toProductRow(product: {
   return {
     name: product.name,
     brand: product.brand,
+    location: product.location,
     cost: product.cost,
     price: product.price,
     stock: product.stock,

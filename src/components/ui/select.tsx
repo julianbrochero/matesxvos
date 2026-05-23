@@ -12,7 +12,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         {label ? <span>{label}</span> : null}
         <select
           className={cn(
-            "premium-focus h-12 rounded-2xl border border-line bg-white/80 px-4 text-sm text-ink shadow-sm",
+            "premium-focus h-11 rounded-md border border-line bg-white px-3 text-sm text-ink shadow-sm",
             className,
           )}
           ref={ref}

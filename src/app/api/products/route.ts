@@ -7,6 +7,7 @@ import { mapProduct, toProductRow } from "@/lib/supabase/mappers";
 const productSchema = z.object({
   name: z.string().min(1),
   brand: z.string().min(1),
+  location: z.string().min(1),
   cost: z.coerce.number().positive(),
   price: z.coerce.number().positive(),
   stock: z.coerce.number().int().nonnegative(),

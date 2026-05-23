@@ -17,13 +17,13 @@ export function Modal({ open, title, subtitle, onClose, children }: ModalProps) 
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-50 grid place-items-end bg-black/20 p-3 backdrop-blur-xl sm:place-items-center sm:p-6"
+          className="fixed inset-0 z-50 grid place-items-end bg-black/20 p-3 backdrop-blur-sm sm:place-items-center sm:p-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="glass max-h-[92vh] w-full max-w-2xl overflow-auto rounded-[1.75rem] p-5 sm:p-6"
+            className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-md border border-line bg-white p-5 shadow-lg sm:p-6"
             initial={{ y: 24, scale: 0.98, opacity: 0 }}
             animate={{ y: 0, scale: 1, opacity: 1 }}
             exit={{ y: 18, scale: 0.98, opacity: 0 }}

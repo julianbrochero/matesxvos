@@ -4,6 +4,7 @@ export type Product = {
   id: string;
   name: string;
   brand: string;
+  location: string;
   cost: number;
   price: number;
   stock: number;
@@ -41,12 +42,12 @@ export type SaleInput = {
 export type ProductInput = Omit<Product, "id" | "sold">;
 
 export const seedProducts: Product[] = [
-  { id: "p1", name: "Baldo 1kg", brand: "Baldo", cost: 12000, price: 17000, stock: 34, minStock: 8, sold: 42 },
-  { id: "p2", name: "Canarias Serena 1kg", brand: "Canarias", cost: 10800, price: 15800, stock: 18, minStock: 10, sold: 31 },
-  { id: "p3", name: "Playadito 1kg", brand: "Playadito", cost: 7200, price: 11200, stock: 46, minStock: 12, sold: 55 },
-  { id: "p4", name: "La Merced Campo 500g", brand: "La Merced", cost: 5400, price: 8200, stock: 12, minStock: 8, sold: 18 },
-  { id: "p5", name: "Sara Tradicional 1kg", brand: "Sara", cost: 9800, price: 14500, stock: 7, minStock: 9, sold: 22 },
-  { id: "p6", name: "Rei Verde Export 1kg", brand: "Rei Verde", cost: 11500, price: 16900, stock: 15, minStock: 6, sold: 15 },
+  { id: "p1", name: "Baldo 1kg", brand: "Baldo", location: "Depósito", cost: 12000, price: 17000, stock: 34, minStock: 8, sold: 42 },
+  { id: "p2", name: "Canarias Serena 1kg", brand: "Canarias", location: "Estante A", cost: 10800, price: 15800, stock: 18, minStock: 10, sold: 31 },
+  { id: "p3", name: "Playadito 1kg", brand: "Playadito", location: "Depósito", cost: 7200, price: 11200, stock: 46, minStock: 12, sold: 55 },
+  { id: "p4", name: "La Merced Campo 500g", brand: "La Merced", location: "Estante B", cost: 5400, price: 8200, stock: 12, minStock: 8, sold: 18 },
+  { id: "p5", name: "Sara Tradicional 1kg", brand: "Sara", location: "Mostrador", cost: 9800, price: 14500, stock: 7, minStock: 9, sold: 22 },
+  { id: "p6", name: "Rei Verde Export 1kg", brand: "Rei Verde", location: "Depósito", cost: 11500, price: 16900, stock: 15, minStock: 6, sold: 15 },
 ];
 
 export const seedMovements: Movement[] = [

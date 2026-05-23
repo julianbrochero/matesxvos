@@ -4,6 +4,7 @@ create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   brand text not null,
+  location text not null default '',
   cost numeric(12, 2) not null check (cost > 0),
   price numeric(12, 2) not null check (price > 0),
   stock integer not null default 0 check (stock >= 0),
@@ -12,6 +13,13 @@ create table if not exists public.products (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.products
+add column if not exists location text not null default '';
+
+update public.products
+set location = brand
+where location = '';
 
 create table if not exists public.movements (
   id uuid primary key default gen_random_uuid(),
@@ -151,17 +159,17 @@ begin
 end;
 $$;
 
-insert into public.products (name, brand, cost, price, stock, min_stock, sold)
+insert into public.products (name, brand, location, cost, price, stock, min_stock, sold)
 select *
 from (
   values
-    ('Baldo 1kg', 'Baldo', 12000, 17000, 34, 8, 42),
-    ('Canarias Serena 1kg', 'Canarias', 10800, 15800, 18, 10, 31),
-    ('Playadito 1kg', 'Playadito', 7200, 11200, 46, 12, 55),
-    ('La Merced Campo 500g', 'La Merced', 5400, 8200, 12, 8, 18),
-    ('Sara Tradicional 1kg', 'Sara', 9800, 14500, 7, 9, 22),
-    ('Rei Verde Export 1kg', 'Rei Verde', 11500, 16900, 15, 6, 15)
-) as seed(name, brand, cost, price, stock, min_stock, sold)
+    ('Baldo 1kg', 'Baldo', 'Depósito', 12000, 17000, 34, 8, 42),
+    ('Canarias Serena 1kg', 'Canarias', 'Estante A', 10800, 15800, 18, 10, 31),
+    ('Playadito 1kg', 'Playadito', 'Depósito', 7200, 11200, 46, 12, 55),
+    ('La Merced Campo 500g', 'La Merced', 'Estante B', 5400, 8200, 12, 8, 18),
+    ('Sara Tradicional 1kg', 'Sara', 'Mostrador', 9800, 14500, 7, 9, 22),
+    ('Rei Verde Export 1kg', 'Rei Verde', 'Depósito', 11500, 16900, 15, 6, 15)
+) as seed(name, brand, location, cost, price, stock, min_stock, sold)
 where not exists (select 1 from public.products);
 
 insert into public.movements (type, title, detail, amount, profit, date, seller, payment)
