@@ -38,7 +38,7 @@ type StockState = {
 };
 
 const LOCAL_MODE_ENABLED = process.env.NODE_ENV !== "production";
-const DATABASE_CONNECTION_ERROR = "No se pudo conectar a la base de datos. Revisá las variables de Supabase en Vercel.";
+const DATABASE_CONNECTION_ERROR = "No se pudo conectar a la base de datos.";
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -48,7 +48,8 @@ function remoteError(error: unknown) {
   if (error instanceof Error && error.message.toLowerCase().includes("no autorizado")) {
     return "La sesion vencio. Volve a entrar.";
   }
-  if (!LOCAL_MODE_ENABLED) return DATABASE_CONNECTION_ERROR;
+  if (!LOCAL_MODE_ENABLED && error instanceof Error) return `${DATABASE_CONNECTION_ERROR} ${error.message}`;
+  if (!LOCAL_MODE_ENABLED) return `${DATABASE_CONNECTION_ERROR} Revisá las variables de Supabase en Vercel.`;
   return error instanceof Error ? error.message : "No se pudo conectar con Supabase";
 }
 
