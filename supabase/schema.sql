@@ -145,7 +145,8 @@ create or replace function public.register_sale(
   p_seller text,
   p_payment text,
   p_date date,
-  p_status text default 'entregado'
+  p_status text default 'entregado',
+  p_unit_price numeric default null
 )
 returns jsonb
 language plpgsql
@@ -154,6 +155,7 @@ set search_path = public
 as $$
 declare
   v_product public.products%rowtype;
+  v_unit_price numeric(12, 2);
   v_amount numeric(12, 2);
   v_profit numeric(12, 2);
 begin
@@ -163,6 +165,10 @@ begin
 
   if p_status not in ('pendiente', 'entregado', 'cancelado') then
     raise exception 'Estado inválido';
+  end if;
+
+  if p_unit_price is not null and p_unit_price <= 0 then
+    raise exception 'Precio inválido';
   end if;
 
   select * into v_product
@@ -178,8 +184,9 @@ begin
     raise exception 'Stock insuficiente';
   end if;
 
-  v_amount := v_product.price * p_quantity;
-  v_profit := (v_product.price - v_product.cost) * p_quantity;
+  v_unit_price := coalesce(p_unit_price, v_product.price);
+  v_amount := v_unit_price * p_quantity;
+  v_profit := (v_unit_price - v_product.cost) * p_quantity;
 
   update public.products
   set stock = stock - p_quantity,

@@ -6,6 +6,7 @@ import { isSupabaseConfigured, getSupabaseAdmin } from "@/lib/supabase/server";
 const saleSchema = z.object({
   productId: z.string().min(1),
   quantity: z.coerce.number().int().positive(),
+  unitPrice: z.coerce.number().positive(),
   seller: z.string().min(1),
   payment: z.string().min(1),
   date: z.string().min(1),
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest) {
     p_payment: parsed.data.payment,
     p_date: parsed.data.date,
     p_status: parsed.data.status,
+    p_unit_price: parsed.data.unitPrice,
   });
 
   if (error) {

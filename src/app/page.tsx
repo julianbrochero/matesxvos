@@ -497,6 +497,7 @@ function SalesView() {
   const [saleLocation, setSaleLocation] = useState<LocationName>("Buenos Aires");
   const [productId, setProductId] = useState(products[0]?.id ?? "");
   const [quantity, setQuantity] = useState("1");
+  const [salePrice, setSalePrice] = useState("");
   const [seller, setSeller] = useState<(typeof VENDORS)[number]>("Julian");
   const [payment, setPayment] = useState("Mercado Pago");
   const [status, setStatus] = useState<SaleStatus>("entregado");
@@ -504,12 +505,16 @@ function SalesView() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const selected = products.find((product) => product.id === productId);
+  const selectedId = selected?.id;
+  const selectedPrice = selected?.price;
   const saleProducts = useMemo(
     () => products.filter((product) => productLocation(product) === saleLocation),
     [products, saleLocation],
   );
   const quantityValue = toPositiveInteger(quantity);
-  const total = (selected?.price ?? 0) * quantityValue;
+  const unitPriceValue = toPositiveNumber(salePrice);
+  const effectiveUnitPrice = unitPriceValue > 0 ? unitPriceValue : selected?.price ?? 0;
+  const total = effectiveUnitPrice * quantityValue;
   const sales = movements.filter((movement) => movement.type === "venta");
   const visibleSales = sales.filter((sale) => {
     const statusOk = statusFilter === "todos" || saleStatus(sale) === statusFilter;
@@ -522,9 +527,19 @@ function SalesView() {
     setProductId(saleProducts[0]?.id ?? "");
   }, [productId, saleProducts]);
 
+  useEffect(() => {
+    setSalePrice(selectedPrice ? String(selectedPrice) : "");
+  }, [selectedId, selectedPrice]);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const ok = await registerSale({ productId, quantity: quantityValue, seller, payment, date, status });
+    if (unitPriceValue <= 0) {
+      setMessage("");
+      setError("Ingresá un precio de venta válido.");
+      return;
+    }
+
+    const ok = await registerSale({ productId, quantity: quantityValue, unitPrice: unitPriceValue, seller, payment, date, status });
     if (!ok) {
       setMessage("");
       setError("No hay stock suficiente.");
@@ -534,6 +549,7 @@ function SalesView() {
     setMessage("Venta registrada.");
     setModalOpen(false);
     setQuantity("1");
+    setSalePrice(selectedPrice ? String(selectedPrice) : "");
     setStatus("entregado");
   }
 
@@ -633,8 +649,9 @@ function SalesView() {
           <Select label="Producto" value={productId} required onChange={(event) => setProductId(event.target.value)}>
             {saleProducts.map((product) => <option key={product.id} value={product.id}>{product.name} - {product.stock} u.</option>)}
           </Select>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <Input label="Cantidad" required type="number" min={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+            <Input label="Precio venta" required type="number" min={1} step="0.01" value={salePrice} onChange={(event) => setSalePrice(event.target.value)} />
             <Input label="Fecha" required type="date" value={date} onChange={(event) => setDate(event.target.value)} />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -656,6 +673,10 @@ function SalesView() {
             <div className="flex justify-between gap-3">
               <span className="text-slate-500">Disponible</span>
               <span className="font-medium">{selected?.stock ?? 0} u.</span>
+            </div>
+            <div className="mt-1 flex justify-between gap-3">
+              <span className="text-slate-500">Precio lista</span>
+              <span className="font-medium">{currency(selected?.price ?? 0)}</span>
             </div>
             <div className="mt-1 flex justify-between gap-3">
               <span className="text-slate-500">Total</span>

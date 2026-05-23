@@ -37,6 +37,7 @@ export type PurchaseInput = {
 export type SaleInput = {
   productId: string;
   quantity: number;
+  unitPrice: number;
   seller: string;
   payment: string;
   date: string;

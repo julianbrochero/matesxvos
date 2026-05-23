@@ -149,12 +149,13 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
   };
 }
 
-function localRegisterSale({ productId, quantity, seller, payment, date, status }: SaleInput, state: StockState) {
+function localRegisterSale({ productId, quantity, unitPrice, seller, payment, date, status }: SaleInput, state: StockState) {
   const product = state.products.find((item) => item.id === productId);
   if (!product || product.stock < quantity) return null;
 
-  const amount = product.price * quantity;
-  const profit = (product.price - product.cost) * quantity;
+  const salePrice = unitPrice > 0 ? unitPrice : product.price;
+  const amount = salePrice * quantity;
+  const profit = (salePrice - product.cost) * quantity;
 
   return {
     products: state.products.map((item) =>
