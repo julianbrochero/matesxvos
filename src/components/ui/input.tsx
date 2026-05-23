@@ -12,7 +12,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label ? <span>{label}</span> : null}
         <input
           className={cn(
-            "premium-focus h-11 rounded-md border border-line bg-white px-3 text-sm text-ink shadow-sm placeholder:text-black/35",
+            "premium-focus h-12 rounded-2xl border border-line bg-white/90 px-4 text-sm text-ink shadow-sm placeholder:text-black/35",
             className,
           )}
           ref={ref}

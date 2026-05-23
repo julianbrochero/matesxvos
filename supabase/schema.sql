@@ -25,6 +25,8 @@ create table if not exists public.movements (
   id uuid primary key default gen_random_uuid(),
   product_id uuid references public.products(id) on delete set null,
   type text not null check (type in ('compra', 'venta', 'stock', 'producto')),
+  quantity integer check (quantity is null or quantity > 0),
+  status text check (status in ('pendiente', 'entregado', 'cancelado')),
   title text not null,
   detail text not null,
   amount numeric(12, 2) not null default 0,
@@ -34,6 +36,16 @@ create table if not exists public.movements (
   payment text,
   created_at timestamptz not null default now()
 );
+
+alter table public.movements
+add column if not exists status text check (status in ('pendiente', 'entregado', 'cancelado'));
+
+alter table public.movements
+add column if not exists quantity integer check (quantity is null or quantity > 0);
+
+update public.movements
+set status = 'entregado'
+where type = 'venta' and status is null;
 
 create or replace function public.touch_updated_at()
 returns trigger
@@ -85,10 +97,11 @@ begin
       cost = p_unit_cost
   where id = p_product_id;
 
-  insert into public.movements (product_id, type, title, detail, amount, profit, date)
+  insert into public.movements (product_id, type, quantity, title, detail, amount, profit, date)
   values (
     p_product_id,
     'compra',
+    p_quantity,
     'Compra registrada',
     p_quantity || ' ' || v_product.name || ' ingresaron al stock',
     v_amount,
@@ -105,7 +118,8 @@ create or replace function public.register_sale(
   p_quantity integer,
   p_seller text,
   p_payment text,
-  p_date date
+  p_date date,
+  p_status text default 'entregado'
 )
 returns jsonb
 language plpgsql
@@ -119,6 +133,10 @@ declare
 begin
   if p_quantity <= 0 then
     raise exception 'Cantidad inválida';
+  end if;
+
+  if p_status not in ('pendiente', 'entregado', 'cancelado') then
+    raise exception 'Estado inválido';
   end if;
 
   select * into v_product
@@ -142,10 +160,12 @@ begin
       sold = sold + p_quantity
   where id = p_product_id;
 
-  insert into public.movements (product_id, type, title, detail, amount, profit, date, seller, payment)
+  insert into public.movements (product_id, type, quantity, status, title, detail, amount, profit, date, seller, payment)
   values (
     p_product_id,
     'venta',
+    p_quantity,
+    p_status,
     'Venta registrada',
     p_quantity || ' ' || v_product.name || ' por ' || p_payment,
     v_amount,
@@ -172,12 +192,12 @@ from (
 ) as seed(name, brand, location, cost, price, stock, min_stock, sold)
 where not exists (select 1 from public.products);
 
-insert into public.movements (type, title, detail, amount, profit, date, seller, payment)
+insert into public.movements (type, status, title, detail, amount, profit, date, seller, payment)
 select *
 from (
   values
-    ('venta', 'Venta registrada', '3 Baldo 1kg por Mercado Pago', 51000, 15000, current_date, 'Julian', 'Mercado Pago'),
-    ('compra', 'Ingreso de mercadería', '20 Playadito 1kg al stock', 144000, 0, current_date - 1, null, null),
-    ('venta', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Santiago', 'Efectivo')
-) as seed(type, title, detail, amount, profit, date, seller, payment)
+    ('venta', 'entregado', 'Venta registrada', '3 Baldo 1kg por Mercado Pago', 51000, 15000, current_date, 'Julian', 'Mercado Pago'),
+    ('compra', null, 'Ingreso de mercadería', '20 Playadito 1kg al stock', 144000, 0, current_date - 1, null, null),
+    ('venta', 'entregado', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Santiago', 'Efectivo')
+) as seed(type, status, title, detail, amount, profit, date, seller, payment)
 where not exists (select 1 from public.movements);

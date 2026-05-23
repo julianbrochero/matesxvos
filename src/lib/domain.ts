@@ -15,6 +15,9 @@ export type Product = {
 export type Movement = {
   id: string;
   type: "compra" | "venta" | "stock" | "producto";
+  productId?: string;
+  quantity?: number;
+  status?: "pendiente" | "entregado" | "cancelado";
   title: string;
   detail: string;
   amount: number;
@@ -37,6 +40,7 @@ export type SaleInput = {
   seller: string;
   payment: string;
   date: string;
+  status: "pendiente" | "entregado" | "cancelado";
 };
 
 export type ProductInput = Omit<Product, "id" | "sold">;
@@ -54,6 +58,8 @@ export const seedMovements: Movement[] = [
   {
     id: "m1",
     type: "venta",
+    productId: "p1",
+    quantity: 3,
     title: "Venta registrada",
     detail: "3 Baldo 1kg por Mercado Pago",
     amount: 51000,
@@ -61,10 +67,13 @@ export const seedMovements: Movement[] = [
     date: today(),
     seller: "Julian",
     payment: "Mercado Pago",
+    status: "entregado",
   },
   {
     id: "m2",
     type: "compra",
+    productId: "p3",
+    quantity: 20,
     title: "Ingreso de mercadería",
     detail: "20 Playadito 1kg al stock",
     amount: 144000,
@@ -74,6 +83,8 @@ export const seedMovements: Movement[] = [
   {
     id: "m3",
     type: "venta",
+    productId: "p2",
+    quantity: 2,
     title: "Venta registrada",
     detail: "2 Canarias Serena 1kg en efectivo",
     amount: 31600,
@@ -81,5 +92,6 @@ export const seedMovements: Movement[] = [
     date: "2026-05-16",
     seller: "Santiago",
     payment: "Efectivo",
+    status: "entregado",
   },
 ];

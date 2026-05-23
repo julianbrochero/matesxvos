@@ -8,8 +8,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Mates x Vos | Stock simple",
-  description: "Sistema simple para ver stock, cargar productos, registrar ventas y descargar precios.",
+  title: "Mates x Vos | Dashboard de stock y ventas",
+  description: "Plataforma moderna para gestionar productos, stock, ventas, encargos y listas de precios.",
 };
 
 export default function RootLayout({

@@ -8,6 +8,7 @@ const saleSchema = z.object({
   seller: z.string().min(1),
   payment: z.string().min(1),
   date: z.string().min(1),
+  status: z.enum(["pendiente", "entregado", "cancelado"]).default("entregado"),
 });
 
 export async function POST(request: Request) {
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
     p_seller: parsed.data.seller,
     p_payment: parsed.data.payment,
     p_date: parsed.data.date,
+    p_status: parsed.data.status,
   });
 
   if (error) {

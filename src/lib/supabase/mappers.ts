@@ -15,6 +15,9 @@ type ProductRow = {
 type MovementRow = {
   id: string;
   type: Movement["type"];
+  product_id: string | null;
+  quantity: number | null;
+  status: Movement["status"] | null;
   title: string;
   detail: string;
   amount: number | string;
@@ -42,6 +45,9 @@ export function mapMovement(row: MovementRow): Movement {
   return {
     id: row.id,
     type: row.type,
+    productId: row.product_id ?? undefined,
+    quantity: row.quantity ?? undefined,
+    status: row.status ?? undefined,
     title: row.title,
     detail: row.detail,
     amount: Number(row.amount),

@@ -33,6 +33,7 @@ type StockState = {
   updateStock: (id: string, stock: number) => Promise<void>;
   registerPurchase: (input: PurchaseInput) => Promise<void>;
   registerSale: (input: SaleInput) => Promise<boolean>;
+  updateSaleStatus: (id: string, status: NonNullable<Movement["status"]>) => Promise<void>;
   deleteMovement: (id: string) => Promise<void>;
 };
 
@@ -124,6 +125,8 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
       {
         id: id("m"),
         type: "compra" as const,
+        productId,
+        quantity,
         title: "Compra registrada",
         detail: `${quantity} ${product.name} ingresaron al stock`,
         amount: total,
@@ -135,7 +138,7 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
   };
 }
 
-function localRegisterSale({ productId, quantity, seller, payment, date }: SaleInput, state: StockState) {
+function localRegisterSale({ productId, quantity, seller, payment, date, status }: SaleInput, state: StockState) {
   const product = state.products.find((item) => item.id === productId);
   if (!product || product.stock < quantity) return null;
 
@@ -152,6 +155,8 @@ function localRegisterSale({ productId, quantity, seller, payment, date }: SaleI
       {
         id: id("m"),
         type: "venta" as const,
+        productId,
+        quantity,
         title: "Venta registrada",
         detail: `${quantity} ${product.name} por ${payment}`,
         amount,
@@ -159,10 +164,55 @@ function localRegisterSale({ productId, quantity, seller, payment, date }: SaleI
         date,
         seller,
         payment,
+        status,
       },
       ...state.movements,
     ],
   };
+}
+
+function localUpdateSaleStatus(movementId: string, status: NonNullable<Movement["status"]>, state: StockState) {
+  return {
+    movements: state.movements.map((movement) =>
+      movement.id === movementId && movement.type === "venta" ? { ...movement, status } : movement,
+    ),
+  };
+}
+
+function localDeleteMovement(movementId: string, state: StockState) {
+  const movement = state.movements.find((item) => item.id === movementId);
+  const saleData = movement?.type === "venta" ? saleProductAndQuantity(movement, state.products) : null;
+
+  return {
+    products: saleData
+      ? state.products.map((product) =>
+          product.id === saleData.productId
+            ? {
+                ...product,
+                stock: product.stock + saleData.quantity,
+                sold: Math.max(0, product.sold - saleData.quantity),
+              }
+            : product,
+        )
+      : state.products,
+    movements: state.movements.filter((movementItem) => movementItem.id !== movementId),
+  };
+}
+
+function saleProductAndQuantity(movement: Movement, products: Product[]) {
+  if (movement.productId && movement.quantity && movement.quantity > 0) {
+    return { productId: movement.productId, quantity: movement.quantity };
+  }
+
+  const match = movement.detail.match(/^(\d+)\s+(.+?)\s+por\s+/i);
+  if (!match) return null;
+
+  const quantity = Number(match[1]);
+  const productName = match[2];
+  const product = products.find((item) => item.name.toLowerCase() === productName.toLowerCase());
+
+  if (!product || !Number.isFinite(quantity) || quantity <= 0) return null;
+  return { productId: product.id, quantity };
 }
 
 export const useStockStore = create<StockState>()(
@@ -305,11 +355,28 @@ export const useStockStore = create<StockState>()(
           return true;
         }
       },
+      updateSaleStatus: async (movementId, status) => {
+        if (!get().remote) {
+          set((state) => localUpdateSaleStatus(movementId, status, state));
+          return;
+        }
+
+        try {
+          await apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ status }),
+          });
+          await get().hydrate();
+        } catch (error) {
+          set((state) => ({
+            ...localUpdateSaleStatus(movementId, status, state),
+            error: error instanceof Error ? error.message : "",
+          }));
+        }
+      },
       deleteMovement: async (movementId) => {
         if (!get().remote) {
-          set((state) => ({
-            movements: state.movements.filter((movement) => movement.id !== movementId),
-          }));
+          set((state) => localDeleteMovement(movementId, state));
           return;
         }
 
@@ -320,7 +387,7 @@ export const useStockStore = create<StockState>()(
           await get().hydrate();
         } catch (error) {
           set((state) => ({
-            movements: state.movements.filter((movement) => movement.id !== movementId),
+            ...localDeleteMovement(movementId, state),
             error: error instanceof Error ? error.message : "",
           }));
         }
