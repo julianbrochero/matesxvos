@@ -48,6 +48,8 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 APP_PASSWORD=una-clave-privada
 ```
 
+`SUPABASE_URL` debe ser solo la URL base del proyecto, sin `/rest/v1` al final.
+
 3. Deploy.
 
 Build command:
