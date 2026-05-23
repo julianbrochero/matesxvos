@@ -8,7 +8,7 @@ const patchSchema = z
   .object({
     name: z.string().min(1).optional(),
     brand: z.string().min(1).optional(),
-    location: z.string().min(1).optional(),
+    location: z.enum(["Buenos Aires", "Villa Maria"]).optional(),
     cost: z.coerce.number().positive().optional(),
     price: z.coerce.number().positive().optional(),
     stock: z.coerce.number().int().nonnegative().optional(),

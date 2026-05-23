@@ -8,11 +8,11 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, label, children, ...props }, ref) => {
     return (
-      <label className="grid gap-2 text-sm font-medium text-black/70">
+      <label className="grid gap-2 text-sm font-medium text-slate-700">
         {label ? <span>{label}</span> : null}
         <select
           className={cn(
-            "premium-focus h-12 rounded-2xl border border-line bg-white/90 px-4 text-sm text-ink shadow-sm",
+            "h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100",
             className,
           )}
           ref={ref}
