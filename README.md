@@ -15,7 +15,7 @@ La app queda disponible en:
 http://localhost:3000
 ```
 
-Si no hay variables de Supabase configuradas, la app funciona en modo local con datos semilla y persistencia en el navegador.
+En desarrollo, si no hay variables de Supabase configuradas, la app puede funcionar con datos semilla locales. En producción no usa modo local: requiere Supabase configurado.
 
 ## Supabase
 
@@ -32,9 +32,10 @@ supabase/schema.sql
 ```bash
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
+APP_PASSWORD
 ```
 
-La app usa API routes de Next, así que la service role key queda del lado servidor. No la publiques como `NEXT_PUBLIC_*`.
+La app usa API routes de Next, así que la service role key queda del lado servidor. No la publiques como `NEXT_PUBLIC_*`. `APP_PASSWORD` es la clave privada para entrar al panel.
 
 ## Vercel
 
@@ -44,6 +45,7 @@ La app usa API routes de Next, así que la service role key queda del lado servi
 ```bash
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+APP_PASSWORD=una-clave-privada
 ```
 
 3. Deploy.
@@ -65,7 +67,7 @@ Endpoint de chequeo:
 Debe responder:
 
 ```json
-{ "status": "ok", "supabaseConfigured": true }
+{ "status": "ok" }
 ```
 
 ## Backend FastAPI opcional

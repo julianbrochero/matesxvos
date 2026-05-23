@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { today } from "@/lib/utils";
+import { requireAdminRequest } from "@/lib/auth";
 import { isSupabaseConfigured, getSupabaseAdmin } from "@/lib/supabase/server";
 import { mapProduct, toProductRow } from "@/lib/supabase/mappers";
 
@@ -20,7 +21,10 @@ type Params = {
   params: Promise<{ id: string }>;
 };
 
-export async function PATCH(request: Request, { params }: Params) {
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const authError = requireAdminRequest(request);
+  if (authError) return authError;
+
   if (!isSupabaseConfigured) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -73,7 +77,10 @@ export async function PATCH(request: Request, { params }: Params) {
   return NextResponse.json(mapProduct(data));
 }
 
-export async function DELETE(_request: Request, { params }: Params) {
+export async function DELETE(request: NextRequest, { params }: Params) {
+  const authError = requireAdminRequest(request);
+  if (authError) return authError;
+
   if (!isSupabaseConfigured) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }

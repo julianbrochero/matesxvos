@@ -2,6 +2,7 @@
 
 import { FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
+  AlertCircle,
   Boxes,
   CheckCircle2,
   Download,
@@ -30,7 +31,6 @@ type SaleStatus = "pendiente" | "entregado" | "cancelado";
 type SaleFilter = "todos" | SaleStatus;
 
 const LOW_STOCK_LIMIT = 5;
-const SESSION_KEY = "matesxvos-dashboard-session";
 const LOCATIONS: LocationName[] = ["Buenos Aires", "Villa Maria"];
 const VENDORS = ["Julian", "Santiago"] as const;
 const SALE_STATUSES: { id: SaleStatus; label: string }[] = [
@@ -54,13 +54,28 @@ export default function Home() {
   const hydrate = useStockStore((state) => state.hydrate);
 
   useEffect(() => {
-    void hydrate();
-  }, [hydrate]);
+    let active = true;
+
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => {
+        if (active) setSignedIn(Boolean(payload.authenticated));
+      })
+      .catch(() => {
+        if (active) setSignedIn(false);
+      })
+      .finally(() => {
+        if (active) setSessionReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
-    setSignedIn(window.localStorage.getItem(SESSION_KEY) === "active");
-    setSessionReady(true);
-  }, []);
+    if (signedIn) void hydrate();
+  }, [hydrate, signedIn]);
 
   if (!sessionReady) return <div className="min-h-screen bg-slate-50" />;
 
@@ -82,12 +97,33 @@ export default function Home() {
 }
 
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
-  const [operator, setOperator] = useState("Mates x Vos");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    window.localStorage.setItem(SESSION_KEY, "active");
-    onLogin();
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error ?? "No se pudo iniciar sesion");
+      }
+
+      onLogin();
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "No se pudo iniciar sesion");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -96,11 +132,18 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
         <h1 className="text-2xl font-semibold tracking-tight">Mates x Vos</h1>
         <p className="mt-1 text-sm text-slate-500">Stock, ventas y precios.</p>
         <form onSubmit={submit} className="mt-6 grid gap-4">
-          <Input label="Operador" value={operator} onChange={(event) => setOperator(event.target.value)} />
-          <Input label="Clave" type="password" placeholder="Acceso local" />
-          <Button>
+          <Input
+            label="Clave"
+            type="password"
+            autoComplete="current-password"
+            placeholder="Clave de acceso"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          {error ? <ErrorMessage text={error} /> : null}
+          <Button disabled={loading}>
             <CheckCircle2 className="h-4 w-4" />
-            Entrar
+            {loading ? "Entrando..." : "Entrar"}
           </Button>
         </form>
       </section>
@@ -120,10 +163,11 @@ function AppShell({
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const remote = useStockStore((state) => state.remote);
+  const loading = useStockStore((state) => state.loading);
+  const storeError = useStockStore((state) => state.error);
 
-  function logout() {
-    window.localStorage.removeItem(SESSION_KEY);
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
     onLogout();
   }
 
@@ -141,11 +185,7 @@ function AppShell({
             <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
           ))}
         </nav>
-        <div className="mt-6 rounded-lg border border-slate-200 p-3 text-sm">
-          <p className="font-medium">Estado</p>
-          <p className="mt-1 text-slate-500">{remote ? "Supabase activo" : "Modo local"}</p>
-        </div>
-        <Button className="mt-3 w-full justify-start" variant="ghost" onClick={logout}>
+        <Button className="mt-6 w-full justify-start" variant="ghost" onClick={() => void logout()}>
           <LogOut className="h-4 w-4" />
           Salir
         </Button>
@@ -182,13 +222,16 @@ function AppShell({
               </div>
               <p className="hidden text-sm text-slate-500 lg:block">Sistema de stock y ventas</p>
             </div>
-            <Button variant="ghost" size="sm" onClick={logout}>
+            <Button variant="ghost" size="sm" onClick={() => void logout()}>
               <LogOut className="h-4 w-4" />
               Salir
             </Button>
           </div>
         </header>
-        <div className="px-4 py-5 pb-24 sm:px-6 lg:py-6">{children}</div>
+        <div className="grid gap-4 px-4 py-5 pb-24 sm:px-6 lg:py-6">
+          {!loading && storeError ? <ConnectionMessage text={storeError} /> : null}
+          {children}
+        </div>
         <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white lg:hidden">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -1018,6 +1061,18 @@ function SuccessMessage({ text }: { text: string }) {
 
 function ErrorMessage({ text }: { text: string }) {
   return <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{text}</p>;
+}
+
+function ConnectionMessage({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div>
+        <p className="font-medium">Base de datos no conectada</p>
+        <p className="mt-1 text-amber-700">{text}</p>
+      </div>
+    </div>
+  );
 }
 
 function EmptyState({ title, text }: { title: string; text: string }) {

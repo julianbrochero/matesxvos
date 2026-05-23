@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { today } from "@/lib/utils";
+import { requireAdminRequest } from "@/lib/auth";
 import { isSupabaseConfigured, getSupabaseAdmin } from "@/lib/supabase/server";
 import { mapProduct, toProductRow } from "@/lib/supabase/mappers";
 
@@ -14,7 +15,10 @@ const productSchema = z.object({
   minStock: z.coerce.number().int().nonnegative(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireAdminRequest(request);
+  if (authError) return authError;
+
   if (!isSupabaseConfigured) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -28,7 +32,10 @@ export async function GET() {
   return NextResponse.json(data.map(mapProduct));
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authError = requireAdminRequest(request);
+  if (authError) return authError;
+
   if (!isSupabaseConfigured) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }

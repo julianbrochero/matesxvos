@@ -37,8 +37,19 @@ type StockState = {
   deleteMovement: (id: string) => Promise<void>;
 };
 
+const LOCAL_MODE_ENABLED = process.env.NODE_ENV !== "production";
+const DATABASE_CONNECTION_ERROR = "No se pudo conectar a la base de datos. Revisá las variables de Supabase en Vercel.";
+
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function remoteError(error: unknown) {
+  if (error instanceof Error && error.message.toLowerCase().includes("no autorizado")) {
+    return "La sesion vencio. Volve a entrar.";
+  }
+  if (!LOCAL_MODE_ENABLED) return DATABASE_CONNECTION_ERROR;
+  return error instanceof Error ? error.message : "No se pudo conectar con Supabase";
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -218,8 +229,8 @@ function saleProductAndQuantity(movement: Movement, products: Product[]) {
 export const useStockStore = create<StockState>()(
   persist(
     (set, get) => ({
-      products: seedProducts,
-      movements: seedMovements,
+      products: LOCAL_MODE_ENABLED ? seedProducts : [],
+      movements: LOCAL_MODE_ENABLED ? seedMovements : [],
       loading: false,
       remote: false,
       error: "",
@@ -238,14 +249,20 @@ export const useStockStore = create<StockState>()(
           });
         } catch (error) {
           set({
+            products: LOCAL_MODE_ENABLED ? get().products : [],
+            movements: LOCAL_MODE_ENABLED ? get().movements : [],
             loading: false,
             remote: false,
-            error: error instanceof Error ? error.message : "No se pudo conectar con Supabase",
+            error: remoteError(error),
           });
         }
       },
       addProduct: async (product) => {
         if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return;
+          }
           set((state) => localAddProduct(product, state));
           return;
         }
@@ -257,11 +274,19 @@ export const useStockStore = create<StockState>()(
           });
           await get().hydrate();
         } catch (error) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return;
+          }
           set((state) => ({ ...localAddProduct(product, state), error: error instanceof Error ? error.message : "" }));
         }
       },
       updateProduct: async (productId, product) => {
         if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return;
+          }
           set((state) => localUpdateProduct(productId, product, state));
           return;
         }
@@ -273,11 +298,19 @@ export const useStockStore = create<StockState>()(
           });
           await get().hydrate();
         } catch (error) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return;
+          }
           set((state) => ({ ...localUpdateProduct(productId, product, state), error: error instanceof Error ? error.message : "" }));
         }
       },
       deleteProduct: async (productId) => {
         if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return;
+          }
           set((state) => ({
             products: state.products.filter((item) => item.id !== productId),
           }));
@@ -290,6 +323,10 @@ export const useStockStore = create<StockState>()(
           });
           await get().hydrate();
         } catch (error) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return;
+          }
           set((state) => ({
             products: state.products.filter((item) => item.id !== productId),
             error: error instanceof Error ? error.message : "",
@@ -298,6 +335,10 @@ export const useStockStore = create<StockState>()(
       },
       updateStock: async (productId, stock) => {
         if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return;
+          }
           set((state) => localUpdateStock(productId, stock, state));
           return;
         }
@@ -309,11 +350,19 @@ export const useStockStore = create<StockState>()(
           });
           await get().hydrate();
         } catch (error) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return;
+          }
           set((state) => ({ ...localUpdateStock(productId, stock, state), error: error instanceof Error ? error.message : "" }));
         }
       },
       registerPurchase: async (input) => {
         if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return;
+          }
           set((state) => localRegisterPurchase(input, state));
           return;
         }
@@ -325,11 +374,19 @@ export const useStockStore = create<StockState>()(
           });
           await get().hydrate();
         } catch (error) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return;
+          }
           set((state) => ({ ...localRegisterPurchase(input, state), error: error instanceof Error ? error.message : "" }));
         }
       },
       registerSale: async (input) => {
         if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return false;
+          }
           const next = localRegisterSale(input, get());
           if (!next) return false;
           set(next);
@@ -349,6 +406,11 @@ export const useStockStore = create<StockState>()(
             return false;
           }
 
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return false;
+          }
+
           const next = localRegisterSale(input, get());
           if (!next) return false;
           set({ ...next, error: error instanceof Error ? error.message : "" });
@@ -357,6 +419,10 @@ export const useStockStore = create<StockState>()(
       },
       updateSaleStatus: async (movementId, status) => {
         if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return;
+          }
           set((state) => localUpdateSaleStatus(movementId, status, state));
           return;
         }
@@ -368,6 +434,10 @@ export const useStockStore = create<StockState>()(
           });
           await get().hydrate();
         } catch (error) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return;
+          }
           set((state) => ({
             ...localUpdateSaleStatus(movementId, status, state),
             error: error instanceof Error ? error.message : "",
@@ -376,6 +446,10 @@ export const useStockStore = create<StockState>()(
       },
       deleteMovement: async (movementId) => {
         if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return;
+          }
           set((state) => localDeleteMovement(movementId, state));
           return;
         }
@@ -386,6 +460,10 @@ export const useStockStore = create<StockState>()(
           });
           await get().hydrate();
         } catch (error) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return;
+          }
           set((state) => ({
             ...localDeleteMovement(movementId, state),
             error: error instanceof Error ? error.message : "",
@@ -394,10 +472,10 @@ export const useStockStore = create<StockState>()(
       },
     }),
     {
-      name: "matesxvos-premium-stock",
+      name: LOCAL_MODE_ENABLED ? "matesxvos-premium-stock" : "matesxvos-remote-stock",
       partialize: (state) => ({
-        products: state.products,
-        movements: state.movements,
+        products: LOCAL_MODE_ENABLED ? state.products : [],
+        movements: LOCAL_MODE_ENABLED ? state.movements : [],
       }),
     },
   ),
