@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   AlertCircle,
   Boxes,
@@ -1169,67 +1171,57 @@ function getMetrics(products: Product[], movements: Movement[]) {
 async function downloadPricePdf(products: Product[]) {
   if (!products.length) return;
 
-  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-    import("jspdf"),
-    import("jspdf-autotable"),
-  ]);
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  // Premium Header Banner
-  doc.setFillColor(0, 0, 0); // Black background
-  doc.rect(0, 0, pageWidth, 120, "F");
-
-  // Header Text
-  doc.setTextColor(255, 255, 255);
+  doc.setFillColor(248, 250, 252);
+  doc.rect(0, 0, pageWidth, 112, "F");
+  doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(26);
-  doc.text("Mates x Vos", 40, 60);
-
-  // Subtitle
+  doc.setFontSize(22);
+  doc.text("Mates x Vos", 40, 44);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.setTextColor(200, 200, 200); // Light gray
-  doc.text("LISTA DE PRECIOS OFICIAL", 40, 85);
-  doc.text(`Fecha: ${today()}`, pageWidth - 40, 85, { align: "right" });
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Lista de precios para clientes - ${today()}`, 40, 66);
+  doc.text(`${products.length} productos disponibles`, 40, 84);
 
   autoTable(doc, {
-    startY: 140,
-    head: [["Producto", "Marca", "Precio"]],
+    startY: 130,
+    head: [["Producto", "Marca", "Ubicacion", "Precio"]],
     body: products.map((product) => [
       product.name,
       product.brand,
+      productLocation(product),
       currency(product.price),
     ]),
     margin: { left: 40, right: 40 },
-    theme: "plain",
+    theme: "grid",
     styles: {
-      cellPadding: 10,
+      cellPadding: 8,
       font: "helvetica",
-      fontSize: 10,
-      textColor: [0, 0, 0],
-      lineColor: [200, 200, 200],
-      lineWidth: { bottom: 0.5 },
+      fontSize: 9,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.5,
+      textColor: [15, 23, 42],
     },
     headStyles: {
-      fillColor: [0, 0, 0],
-      textColor: [255, 255, 255],
+      fillColor: [15, 23, 42],
       fontStyle: "bold",
-      lineWidth: 0,
+      textColor: [255, 255, 255],
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
     },
     columnStyles: {
-      2: { halign: "right", fontStyle: "bold" },
+      3: { halign: "right", fontStyle: "bold" },
     },
-    didDrawPage: (data: any) => {
-      // Footer
+    didDrawPage: () => {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.setTextColor(100, 100, 100);
-      doc.text("Precios expresados en pesos argentinos. Sujetos a disponibilidad.", 40, pageHeight - 30);
-      if (data.pageNumber) {
-        doc.text(`Página ${data.pageNumber}`, pageWidth - 40, pageHeight - 30, { align: "right" });
-      }
+      doc.setTextColor(100, 116, 139);
+      doc.text("Precios sujetos a disponibilidad.", 40, pageHeight - 32);
     },
   });
 
