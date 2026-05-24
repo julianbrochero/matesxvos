@@ -17,7 +17,7 @@ export type Movement = {
   type: "compra" | "venta" | "stock" | "producto";
   productId?: string;
   quantity?: number;
-  status?: "pendiente" | "entregado" | "cancelado";
+  status?: "entregado" | "encargado";
   title: string;
   detail: string;
   amount: number;
@@ -41,7 +41,7 @@ export type SaleInput = {
   seller: string;
   payment: string;
   date: string;
-  status: "pendiente" | "entregado" | "cancelado";
+  status: "entregado" | "encargado";
 };
 
 export type ProductInput = Omit<Product, "id" | "sold">;

@@ -27,16 +27,15 @@ import { Movement, Product, useStockStore } from "@/lib/store";
 type View = "dashboard" | "stock" | "carga" | "ventas" | "precios";
 type LocationName = "Buenos Aires" | "Villa Maria";
 type LocationFilter = "todos" | LocationName;
-type SaleStatus = "pendiente" | "entregado" | "cancelado";
+type SaleStatus = "entregado" | "encargado";
 type SaleFilter = "todos" | SaleStatus;
 
 const LOW_STOCK_LIMIT = 5;
 const LOCATIONS: LocationName[] = ["Buenos Aires", "Villa Maria"];
 const VENDORS = ["Julian", "Santiago"] as const;
 const SALE_STATUSES: { id: SaleStatus; label: string }[] = [
-  { id: "pendiente", label: "Pendiente" },
   { id: "entregado", label: "Entregado" },
-  { id: "cancelado", label: "Cancelado" },
+  { id: "encargado", label: "Encargado" },
 ];
 
 const navItems: { id: View; label: string; short: string; icon: typeof Boxes }[] = [
@@ -228,30 +227,10 @@ function AppShell({
             </Button>
           </div>
         </header>
-        <div className="grid gap-4 px-4 py-5 pb-24 sm:px-6 lg:py-6">
+        <div className="grid gap-4 px-4 py-5 sm:px-6 lg:py-6">
           {!loading && storeError ? <ConnectionMessage text={storeError} /> : null}
           {children}
         </div>
-        <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white lg:hidden">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = view === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => navigate(item.id)}
-                className={cn(
-                  "grid h-16 place-items-center content-center gap-1 text-xs font-medium transition",
-                  active ? "text-slate-950" : "text-slate-500",
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                {item.short}
-              </button>
-            );
-          })}
-        </nav>
       </div>
     </div>
   );
@@ -570,7 +549,7 @@ function SalesView() {
         <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px] lg:items-center">
           <div className="flex flex-wrap gap-2">
             <SummaryPill label="Total" value={String(visibleSales.length)} />
-            <SummaryPill label="Pendientes" value={String(sales.filter((sale) => saleStatus(sale) === "pendiente").length)} />
+            <SummaryPill label="Encargos" value={String(sales.filter((sale) => saleStatus(sale) === "encargado").length)} />
             <SummaryPill label="Vendido" value={currency(visibleSales.reduce((sum, sale) => sum + sale.amount, 0))} />
           </div>
           <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
@@ -636,7 +615,7 @@ function SalesView() {
         {!visibleSales.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
       </div>
 
-      <Button className="fixed bottom-20 right-4 z-30 rounded-full shadow-lg md:hidden" onClick={() => setModalOpen(true)} disabled={!products.length}>
+      <Button className="fixed bottom-6 right-4 z-30 rounded-full shadow-lg md:hidden" onClick={() => setModalOpen(true)} disabled={!products.length}>
         <Plus className="h-5 w-5" />
         Venta
       </Button>
@@ -975,12 +954,12 @@ function SaleCard({
 
 function SaleStatusBadge({ status }: { status: SaleStatus }) {
   const styles: Record<SaleStatus, string> = {
-    pendiente: "bg-amber-50 text-amber-700",
     entregado: "bg-emerald-50 text-emerald-700",
-    cancelado: "bg-red-50 text-red-700",
+    encargado: "bg-amber-50 text-amber-700",
   };
-  const label = SALE_STATUSES.find((entry) => entry.id === status)?.label ?? "Pendiente";
-  return <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium", styles[status])}>{label}</span>;
+  const label = SALE_STATUSES.find((entry) => entry.id === status)?.label ?? "Entregado";
+  const badgeStyle = styles[status] || styles["encargado"];
+  return <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium", badgeStyle)}>{label}</span>;
 }
 
 function SaleStatusSelect({ value, onChange }: { value: SaleStatus; onChange: (status: SaleStatus) => void }) {
@@ -1118,7 +1097,9 @@ async function removeSale(sale: Movement, deleteMovement: (id: string) => Promis
 }
 
 function saleStatus(movement: Movement): SaleStatus {
-  return movement.status ?? "entregado";
+  const status = movement.status as string;
+  if (status === "encargado" || status === "pendiente") return "encargado";
+  return "entregado";
 }
 
 function locationMatches(product: Product, filter: LocationFilter) {
@@ -1196,53 +1177,59 @@ async function downloadPricePdf(products: Product[]) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  doc.setFillColor(248, 250, 252);
-  doc.rect(0, 0, pageWidth, 112, "F");
-  doc.setTextColor(15, 23, 42);
+  // Premium Header Banner
+  doc.setFillColor(0, 0, 0); // Black background
+  doc.rect(0, 0, pageWidth, 120, "F");
+
+  // Header Text
+  doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.text("Mates x Vos", 40, 44);
+  doc.setFontSize(26);
+  doc.text("Mates x Vos", 40, 60);
+
+  // Subtitle
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(100, 116, 139);
-  doc.text(`Lista de precios para clientes - ${today()}`, 40, 66);
-  doc.text(`${products.length} productos disponibles`, 40, 84);
+  doc.setFontSize(11);
+  doc.setTextColor(200, 200, 200); // Light gray
+  doc.text("LISTA DE PRECIOS OFICIAL", 40, 85);
+  doc.text(`Fecha: ${today()}`, pageWidth - 40, 85, { align: "right" });
 
   autoTable(doc, {
-    startY: 130,
-    head: [["Producto", "Marca", "Ubicacion", "Precio"]],
+    startY: 140,
+    head: [["Producto", "Marca", "Precio"]],
     body: products.map((product) => [
       product.name,
       product.brand,
-      productLocation(product),
       currency(product.price),
     ]),
     margin: { left: 40, right: 40 },
-    theme: "grid",
+    theme: "plain",
     styles: {
-      cellPadding: 8,
+      cellPadding: 10,
       font: "helvetica",
-      fontSize: 9,
-      lineColor: [226, 232, 240],
-      lineWidth: 0.5,
-      textColor: [15, 23, 42],
+      fontSize: 10,
+      textColor: [0, 0, 0],
+      lineColor: [200, 200, 200],
+      lineWidth: { bottom: 0.5 },
     },
     headStyles: {
-      fillColor: [15, 23, 42],
-      fontStyle: "bold",
+      fillColor: [0, 0, 0],
       textColor: [255, 255, 255],
-    },
-    alternateRowStyles: {
-      fillColor: [248, 250, 252],
+      fontStyle: "bold",
+      lineWidth: 0,
     },
     columnStyles: {
-      3: { halign: "right", fontStyle: "bold" },
+      2: { halign: "right", fontStyle: "bold" },
     },
-    didDrawPage: () => {
+    didDrawPage: (data: any) => {
+      // Footer
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text("Precios sujetos a disponibilidad.", 40, pageHeight - 32);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Precios expresados en pesos argentinos. Sujetos a disponibilidad.", 40, pageHeight - 30);
+      if (data.pageNumber) {
+        doc.text(`Página ${data.pageNumber}`, pageWidth - 40, pageHeight - 30, { align: "right" });
+      }
     },
   });
 
