@@ -8,8 +8,12 @@ type Params = {
 };
 
 const patchSchema = z.object({
-  status: z.enum(["pendiente", "entregado", "cancelado"]),
+  status: z.enum(["entregado", "encargado"]),
 });
+
+function toDatabaseSaleStatus(status: z.infer<typeof patchSchema>["status"]) {
+  return status === "encargado" ? "pendiente" : status;
+}
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   const authError = requireAdminRequest(request);
@@ -27,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const { error } = await getSupabaseAdmin()
     .from("movements")
-    .update({ status: parsed.data.status })
+    .update({ status: toDatabaseSaleStatus(parsed.data.status) })
     .eq("id", id)
     .eq("type", "venta");
 

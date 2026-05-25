@@ -53,6 +53,22 @@ function remoteError(error: unknown) {
   return error instanceof Error ? error.message : "No se pudo conectar con Supabase";
 }
 
+function payloadErrorMessage(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== "object" || !("error" in payload)) return fallback;
+
+  const error = (payload as { error: unknown }).error;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object" && "fieldErrors" in error) {
+    const fieldErrors = (error as { fieldErrors?: Record<string, string[]> }).fieldErrors ?? {};
+    const messages = Object.entries(fieldErrors).flatMap(([field, errors]) =>
+      errors.map((message) => `${field}: ${message}`),
+    );
+    if (messages.length) return messages.join(". ");
+  }
+
+  return fallback;
+}
+
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -64,7 +80,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.error ?? `Request failed: ${response.status}`);
+    throw new Error(payloadErrorMessage(payload, `Request failed: ${response.status}`));
   }
 
   return response.json() as Promise<T>;

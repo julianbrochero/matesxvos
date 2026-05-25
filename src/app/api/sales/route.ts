@@ -10,8 +10,12 @@ const saleSchema = z.object({
   seller: z.string().min(1),
   payment: z.string().min(1),
   date: z.string().min(1),
-  status: z.enum(["pendiente", "entregado", "cancelado"]).default("entregado"),
+  status: z.enum(["entregado", "encargado"]).default("entregado"),
 });
+
+function toDatabaseSaleStatus(status: z.infer<typeof saleSchema>["status"]) {
+  return status === "encargado" ? "pendiente" : status;
+}
 
 export async function POST(request: NextRequest) {
   const authError = requireAdminRequest(request);
@@ -32,7 +36,7 @@ export async function POST(request: NextRequest) {
     p_seller: parsed.data.seller,
     p_payment: parsed.data.payment,
     p_date: parsed.data.date,
-    p_status: parsed.data.status,
+    p_status: toDatabaseSaleStatus(parsed.data.status),
     p_unit_price: parsed.data.unitPrice,
   });
 
