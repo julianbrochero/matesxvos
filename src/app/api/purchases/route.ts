@@ -7,6 +7,7 @@ const purchaseSchema = z.object({
   productId: z.string().min(1),
   quantity: z.coerce.number().int().positive(),
   unitCost: z.coerce.number().positive(),
+  unitPrice: z.coerce.number().positive(),
   date: z.string().min(1),
 });
 
@@ -23,7 +24,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { data, error } = await getSupabaseAdmin().rpc("register_purchase", {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase.rpc("register_purchase", {
     p_product_id: parsed.data.productId,
     p_quantity: parsed.data.quantity,
     p_unit_cost: parsed.data.unitCost,
@@ -31,5 +33,13 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const { error: priceError } = await supabase
+    .from("products")
+    .update({ price: parsed.data.unitPrice })
+    .eq("id", parsed.data.productId);
+
+  if (priceError) return NextResponse.json({ error: priceError.message }, { status: 500 });
+
   return NextResponse.json(data);
 }
