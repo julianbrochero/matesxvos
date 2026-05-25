@@ -686,7 +686,6 @@ function PurchasesView() {
   const [productId, setProductId] = useState(locationProducts[0]?.id ?? "");
   const [quantity, setQuantity] = useState("1");
   const [unitCost, setUnitCost] = useState(locationProducts[0] ? String(locationProducts[0].cost) : "");
-  const [unitPrice, setUnitPrice] = useState(locationProducts[0] ? String(locationProducts[0].price) : "");
   const [date, setDate] = useState(today());
   const [done, setDone] = useState("");
   const selected = locationProducts.find((product) => product.id === productId);
@@ -699,15 +698,13 @@ function PurchasesView() {
     const nextProduct = locationProducts[0];
     setProductId(nextProduct?.id ?? "");
     setUnitCost(nextProduct ? String(nextProduct.cost) : "");
-    setUnitPrice(nextProduct ? String(nextProduct.price) : "");
   }, [productId, locationProducts]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     const quantityValue = toPositiveInteger(quantity);
     const costValue = toPositiveNumber(unitCost);
-    const priceValue = toPositiveNumber(unitPrice);
-    await registerPurchase({ productId, quantity: quantityValue, unitCost: costValue, unitPrice: priceValue, date });
+    await registerPurchase({ productId, quantity: quantityValue, unitCost: costValue, date });
     setDone("Stock actualizado.");
   }
 
@@ -720,13 +717,12 @@ function PurchasesView() {
             <Select label="Ubicacion" value={stockLocation} onChange={(event) => { setStockLocation(event.target.value as LocationName); setDone(""); }}>
               {LOCATIONS.map((location) => <option key={location} value={location}>{location}</option>)}
             </Select>
-            <Select label="Producto" value={productId} required onChange={(event) => { const product = locationProducts.find((item) => item.id === event.target.value); setProductId(event.target.value); setUnitCost(product ? String(product.cost) : ""); setUnitPrice(product ? String(product.price) : ""); setDone(""); }}>
+            <Select label="Producto" value={productId} required onChange={(event) => { const product = locationProducts.find((item) => item.id === event.target.value); setProductId(event.target.value); setUnitCost(product ? String(product.cost) : ""); setDone(""); }}>
               {locationProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
             </Select>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Input label="Cantidad" required type="number" min={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
               <Input label="Costo unitario" required type="number" min={1} value={unitCost} onChange={(event) => setUnitCost(event.target.value)} />
-              <Input label="Precio venta" required type="number" min={1} value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} />
             </div>
             <Input label="Fecha" required type="date" value={date} onChange={(event) => setDate(event.target.value)} />
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">

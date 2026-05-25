@@ -140,14 +140,14 @@ function localUpdateStock(productId: string, stock: number, state: StockState) {
   };
 }
 
-function localRegisterPurchase({ productId, quantity, unitCost, unitPrice, date }: PurchaseInput, state: StockState) {
+function localRegisterPurchase({ productId, quantity, unitCost, date }: PurchaseInput, state: StockState) {
   const product = state.products.find((item) => item.id === productId);
   if (!product) return state;
   const total = quantity * unitCost;
 
   return {
     products: state.products.map((item) =>
-      item.id === productId ? { ...item, cost: unitCost, price: unitPrice, stock: item.stock + quantity } : item,
+      item.id === productId ? { ...item, cost: unitCost, stock: item.stock + quantity } : item,
     ),
     movements: [
       {
