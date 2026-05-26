@@ -71,7 +71,17 @@ alter table public.movements
 add column if not exists quantity integer check (quantity is null or quantity > 0);
 
 alter table public.movements
-add column if not exists paid boolean not null default true;
+add column if not exists paid boolean default true;
+
+update public.movements
+set paid = true
+where paid is null;
+
+alter table public.movements
+alter column paid set default true;
+
+alter table public.movements
+alter column paid set not null;
 
 update public.movements
 set status = 'entregado'
@@ -143,7 +153,9 @@ begin
 end;
 $$;
 
+drop function if exists public.register_sale(uuid, integer, text, text, date, text, numeric, boolean);
 drop function if exists public.register_sale(uuid, integer, text, text, date, text, numeric);
+drop function if exists public.register_sale(uuid, integer, text, text, date, text);
 
 create or replace function public.register_sale(
   p_product_id uuid,
@@ -242,3 +254,5 @@ from (
     ('venta', 'entregado', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Santiago', 'Efectivo', false)
 ) as seed(type, status, title, detail, amount, profit, date, seller, payment, paid)
 where not exists (select 1 from public.movements);
+
+notify pgrst, 'reload schema';
