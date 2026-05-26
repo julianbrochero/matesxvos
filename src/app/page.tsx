@@ -51,8 +51,8 @@ const SALE_PAYMENT_STATUSES: { id: SalePaymentStatus; label: string }[] = [
 
 const navItems: { id: View; label: string; short: string; icon: typeof Boxes }[] = [
   { id: "dashboard", label: "Inicio", short: "Inicio", icon: LayoutDashboard },
-  { id: "stock", label: "Stock", short: "Stock", icon: Boxes },
   { id: "ventas", label: "Ventas", short: "Ventas", icon: ShoppingBag },
+  { id: "stock", label: "Stock", short: "Stock", icon: Boxes },
   { id: "carga", label: "Carga", short: "Carga", icon: PackagePlus },
   { id: "precios", label: "Precios", short: "PDF", icon: Download },
 ];
