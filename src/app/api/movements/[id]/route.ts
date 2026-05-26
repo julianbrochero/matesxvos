@@ -8,7 +8,10 @@ type Params = {
 };
 
 const patchSchema = z.object({
-  status: z.enum(["entregado", "encargado"]),
+  status: z.enum(["entregado", "encargado"]).optional(),
+  paymentStatus: z.enum(["pagado", "no_pagado"]).optional(),
+}).refine((value) => value.status || value.paymentStatus, {
+  message: "Al menos un estado es requerido",
 });
 
 function toDatabaseSaleStatus(status: z.infer<typeof patchSchema>["status"]) {
@@ -29,9 +32,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const updates: { status?: string; paid?: boolean } = {};
+  if (parsed.data.status) updates.status = toDatabaseSaleStatus(parsed.data.status);
+  if (parsed.data.paymentStatus) updates.paid = parsed.data.paymentStatus === "pagado";
+
   const { error } = await getSupabaseAdmin()
     .from("movements")
-    .update({ status: toDatabaseSaleStatus(parsed.data.status) })
+    .update(updates)
     .eq("id", id)
     .eq("type", "venta");
 

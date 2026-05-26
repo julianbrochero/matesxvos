@@ -11,6 +11,7 @@ const saleSchema = z.object({
   payment: z.string().min(1),
   date: z.string().min(1),
   status: z.enum(["entregado", "encargado"]).default("entregado"),
+  paymentStatus: z.enum(["pagado", "no_pagado"]).default("pagado"),
 });
 
 function toDatabaseSaleStatus(status: z.infer<typeof saleSchema>["status"]) {
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
     p_date: parsed.data.date,
     p_status: toDatabaseSaleStatus(parsed.data.status),
     p_unit_price: parsed.data.unitPrice,
+    p_paid: parsed.data.paymentStatus === "pagado",
   });
 
   if (error) {

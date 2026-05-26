@@ -25,6 +25,7 @@ type MovementRow = {
   date: string;
   seller: string | null;
   payment: string | null;
+  paid?: boolean | null;
 };
 
 export function mapProduct(row: ProductRow): Product {
@@ -55,6 +56,7 @@ export function mapMovement(row: MovementRow): Movement {
     date: row.date,
     seller: row.seller ?? undefined,
     payment: row.payment ?? undefined,
+    paymentStatus: row.paid === false ? "no_pagado" : "pagado",
   };
 }
 

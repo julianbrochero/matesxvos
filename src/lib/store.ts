@@ -34,6 +34,7 @@ type StockState = {
   registerPurchase: (input: PurchaseInput) => Promise<void>;
   registerSale: (input: SaleInput) => Promise<boolean>;
   updateSaleStatus: (id: string, status: NonNullable<Movement["status"]>) => Promise<void>;
+  updateSalePaymentStatus: (id: string, paymentStatus: NonNullable<Movement["paymentStatus"]>) => Promise<void>;
   deleteMovement: (id: string) => Promise<void>;
 };
 
@@ -166,7 +167,10 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
   };
 }
 
-function localRegisterSale({ productId, quantity, unitPrice, seller, payment, date, status }: SaleInput, state: StockState) {
+function localRegisterSale(
+  { productId, quantity, unitPrice, seller, payment, date, status, paymentStatus }: SaleInput,
+  state: StockState,
+) {
   const product = state.products.find((item) => item.id === productId);
   if (!product || product.stock < quantity) return null;
 
@@ -194,6 +198,7 @@ function localRegisterSale({ productId, quantity, unitPrice, seller, payment, da
         seller,
         payment,
         status,
+        paymentStatus,
       },
       ...state.movements,
     ],
@@ -204,6 +209,18 @@ function localUpdateSaleStatus(movementId: string, status: NonNullable<Movement[
   return {
     movements: state.movements.map((movement) =>
       movement.id === movementId && movement.type === "venta" ? { ...movement, status } : movement,
+    ),
+  };
+}
+
+function localUpdateSalePaymentStatus(
+  movementId: string,
+  paymentStatus: NonNullable<Movement["paymentStatus"]>,
+  state: StockState,
+) {
+  return {
+    movements: state.movements.map((movement) =>
+      movement.id === movementId && movement.type === "venta" ? { ...movement, paymentStatus } : movement,
     ),
   };
 }
@@ -458,6 +475,33 @@ export const useStockStore = create<StockState>()(
           }
           set((state) => ({
             ...localUpdateSaleStatus(movementId, status, state),
+            error: error instanceof Error ? error.message : "",
+          }));
+        }
+      },
+      updateSalePaymentStatus: async (movementId, paymentStatus) => {
+        if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return;
+          }
+          set((state) => localUpdateSalePaymentStatus(movementId, paymentStatus, state));
+          return;
+        }
+
+        try {
+          await apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ paymentStatus }),
+          });
+          await get().hydrate();
+        } catch (error) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return;
+          }
+          set((state) => ({
+            ...localUpdateSalePaymentStatus(movementId, paymentStatus, state),
             error: error instanceof Error ? error.message : "",
           }));
         }

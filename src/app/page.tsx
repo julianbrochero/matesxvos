@@ -23,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
+import { AlertToaster } from "@/components/ui/alert-toaster";
+import { type AlertType, useAlertStore } from "@/lib/alerts";
 import { cn, currency, today } from "@/lib/utils";
 import { Movement, Product, useStockStore } from "@/lib/store";
 
@@ -31,6 +33,9 @@ type LocationName = "Buenos Aires" | "Villa Maria";
 type LocationFilter = "todos" | LocationName;
 type SaleStatus = "entregado" | "encargado";
 type SaleFilter = "todos" | SaleStatus;
+type SalePaymentStatus = "pagado" | "no_pagado";
+type SalePaymentFilter = "todos" | SalePaymentStatus;
+type Notify = (alert: { type: AlertType; title: string; message?: string; persistent?: boolean }) => void;
 
 const LOW_STOCK_LIMIT = 5;
 const LOCATIONS: LocationName[] = ["Buenos Aires", "Villa Maria"];
@@ -38,6 +43,10 @@ const VENDORS = ["Julian", "Santiago"] as const;
 const SALE_STATUSES: { id: SaleStatus; label: string }[] = [
   { id: "entregado", label: "Entregado" },
   { id: "encargado", label: "Encargado" },
+];
+const SALE_PAYMENT_STATUSES: { id: SalePaymentStatus; label: string }[] = [
+  { id: "pagado", label: "Pagado" },
+  { id: "no_pagado", label: "No pagado" },
 ];
 
 const navItems: { id: View; label: string; short: string; icon: typeof Boxes }[] = [
@@ -78,22 +87,37 @@ export default function Home() {
     if (signedIn) void hydrate();
   }, [hydrate, signedIn]);
 
-  if (!sessionReady) return <div className="min-h-screen bg-slate-50" />;
+  if (!sessionReady) {
+    return (
+      <>
+        <AlertToaster />
+        <div className="min-h-screen bg-slate-50" />
+      </>
+    );
+  }
 
   if (!signedIn) {
-    return <LoginScreen onLogin={() => setSignedIn(true)} />;
+    return (
+      <>
+        <AlertToaster />
+        <LoginScreen onLogin={() => setSignedIn(true)} />
+      </>
+    );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
-      <AppShell view={view} setView={setView} onLogout={() => setSignedIn(false)}>
-        {view === "dashboard" && <DashboardView setView={setView} />}
-        {view === "stock" && <StockView setView={setView} />}
-        {view === "ventas" && <SalesView />}
-        {view === "carga" && <PurchasesView />}
-        {view === "precios" && <PricesView />}
-      </AppShell>
-    </main>
+    <>
+      <AlertToaster />
+      <main className="min-h-screen bg-slate-50 text-slate-950">
+        <AppShell view={view} setView={setView} onLogout={() => setSignedIn(false)}>
+          {view === "dashboard" && <DashboardView setView={setView} />}
+          {view === "stock" && <StockView setView={setView} />}
+          {view === "ventas" && <SalesView />}
+          {view === "carga" && <PurchasesView />}
+          {view === "precios" && <PricesView />}
+        </AppShell>
+      </main>
+    </>
   );
 }
 
@@ -166,9 +190,17 @@ function AppShell({
   const [menuOpen, setMenuOpen] = useState(false);
   const loading = useStockStore((state) => state.loading);
   const storeError = useStockStore((state) => state.error);
+  const notify = useAlertStore((state) => state.notify);
+
+  useEffect(() => {
+    if (!loading && storeError) {
+      notify({ type: "warning", title: "Base de datos no conectada", message: storeError });
+    }
+  }, [loading, notify, storeError]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+    notify({ type: "info", title: "Sesión cerrada" });
     onLogout();
   }
 
@@ -335,6 +367,7 @@ function StockView({ setView }: { setView: (view: View) => void }) {
   const updateProduct = useStockStore((state) => state.updateProduct);
   const deleteProduct = useStockStore((state) => state.deleteProduct);
   const updateStock = useStockStore((state) => state.updateStock);
+  const notify = useAlertStore((state) => state.notify);
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState("todos");
   const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
@@ -400,7 +433,7 @@ function StockView({ setView }: { setView: (view: View) => void }) {
                 <td className="px-4 py-3 text-slate-600">{product.brand}</td>
                 <td className="px-4 py-3 text-slate-600">{productLocation(product)}</td>
                 <td className="px-4 py-3">
-                  <StockEditor product={product} onSave={(stock) => void updateStock(product.id, stock)} />
+                  <StockEditor product={product} onSave={(stock) => void saveStock(product, stock, updateStock, notify)} />
                 </td>
                 <td className="px-4 py-3 font-medium">{currency(product.price)}</td>
                 <td className="px-4 py-3">
@@ -408,7 +441,7 @@ function StockView({ setView }: { setView: (view: View) => void }) {
                     <Button variant="secondary" size="icon" onClick={() => { setEditing(product); setModalOpen(true); }} aria-label="Editar producto">
                       <Edit3 className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => void confirmDelete(product, deleteProduct)} aria-label="Eliminar producto">
+                    <Button variant="ghost" size="icon" onClick={() => void confirmDelete(product, deleteProduct, notify)} aria-label="Eliminar producto">
                       <Trash2 className="h-4 w-4 text-red-600" />
                     </Button>
                   </div>
@@ -435,11 +468,11 @@ function StockView({ setView }: { setView: (view: View) => void }) {
               <Info label="Precio" value={currency(product.price)} />
             </div>
             <div className="mt-4 grid grid-cols-[1fr_auto_auto] gap-2">
-              <StockEditor product={product} onSave={(stock) => void updateStock(product.id, stock)} />
+              <StockEditor product={product} onSave={(stock) => void saveStock(product, stock, updateStock, notify)} />
               <Button variant="secondary" size="icon" onClick={() => { setEditing(product); setModalOpen(true); }} aria-label="Editar producto">
                 <Edit3 className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => void confirmDelete(product, deleteProduct)} aria-label="Eliminar producto">
+              <Button variant="ghost" size="icon" onClick={() => void confirmDelete(product, deleteProduct, notify)} aria-label="Eliminar producto">
                 <Trash2 className="h-4 w-4 text-red-600" />
               </Button>
             </div>
@@ -455,9 +488,14 @@ function StockView({ setView }: { setView: (view: View) => void }) {
           setModalOpen(false);
           setEditing(null);
         }}
-        onSubmit={(values) => {
-          if (editing) void updateProduct(editing.id, values);
-          else void addProduct(values);
+        onSubmit={async (values) => {
+          if (editing) {
+            await updateProduct(editing.id, values);
+            notify({ type: "success", title: "Producto actualizado", message: values.name });
+          } else {
+            await addProduct(values);
+            notify({ type: "success", title: "Producto creado", message: values.name });
+          }
           setModalOpen(false);
           setEditing(null);
         }}
@@ -471,9 +509,12 @@ function SalesView() {
   const movements = useStockStore((state) => state.movements);
   const registerSale = useStockStore((state) => state.registerSale);
   const updateSaleStatus = useStockStore((state) => state.updateSaleStatus);
+  const updateSalePaymentStatus = useStockStore((state) => state.updateSalePaymentStatus);
   const deleteMovement = useStockStore((state) => state.deleteMovement);
+  const notify = useAlertStore((state) => state.notify);
   const [modalOpen, setModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<SaleFilter>("todos");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<SalePaymentFilter>("todos");
   const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
   const [saleLocation, setSaleLocation] = useState<LocationName>("Buenos Aires");
   const [productId, setProductId] = useState(products[0]?.id ?? "");
@@ -482,9 +523,8 @@ function SalesView() {
   const [seller, setSeller] = useState<(typeof VENDORS)[number]>("Julian");
   const [payment, setPayment] = useState("Mercado Pago");
   const [status, setStatus] = useState<SaleStatus>("entregado");
+  const [paymentStatus, setPaymentStatus] = useState<SalePaymentStatus>("pagado");
   const [date, setDate] = useState(today());
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
   const selected = products.find((product) => product.id === productId);
   const selectedId = selected?.id;
   const selectedPrice = selected?.price;
@@ -499,8 +539,9 @@ function SalesView() {
   const sales = movements.filter((movement) => movement.type === "venta");
   const visibleSales = sales.filter((sale) => {
     const statusOk = statusFilter === "todos" || saleStatus(sale) === statusFilter;
+    const paymentStatusOk = paymentStatusFilter === "todos" || salePaymentStatus(sale) === paymentStatusFilter;
     const locationOk = movementMatchesLocation(sale, products, locationFilter);
-    return statusOk && locationOk;
+    return statusOk && paymentStatusOk && locationOk;
   });
 
   useEffect(() => {
@@ -515,23 +556,44 @@ function SalesView() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (unitPriceValue <= 0) {
-      setMessage("");
-      setError("Ingresá un precio de venta válido.");
+      notify({ type: "warning", title: "Ingresá un precio de venta válido" });
       return;
     }
 
-    const ok = await registerSale({ productId, quantity: quantityValue, unitPrice: unitPriceValue, seller, payment, date, status });
+    const ok = await registerSale({
+      productId,
+      quantity: quantityValue,
+      unitPrice: unitPriceValue,
+      seller,
+      payment,
+      date,
+      status,
+      paymentStatus,
+    });
     if (!ok) {
-      setMessage("");
-      setError("No hay stock suficiente.");
+      notify({ type: "warning", title: "No hay stock suficiente", message: selected?.name });
       return;
     }
-    setError("");
-    setMessage("Venta registrada.");
+    notify({ type: "success", title: status === "encargado" ? "Encargo registrado" : "Venta registrada", message: selected?.name });
     setModalOpen(false);
     setQuantity("1");
     setSalePrice(selectedPrice ? String(selectedPrice) : "");
     setStatus("entregado");
+    setPaymentStatus("pagado");
+  }
+
+  async function changeSaleStatus(sale: Movement, nextStatus: SaleStatus) {
+    await updateSaleStatus(sale.id, nextStatus);
+    notify({ type: "success", title: "Estado actualizado", message: nextStatus === "encargado" ? "Encargado" : "Entregado" });
+  }
+
+  async function changeSalePaymentStatus(sale: Movement, nextPaymentStatus: SalePaymentStatus) {
+    await updateSalePaymentStatus(sale.id, nextPaymentStatus);
+    notify({
+      type: "success",
+      title: "Pago actualizado",
+      message: nextPaymentStatus === "pagado" ? "Pagado" : "No pagado",
+    });
   }
 
   return (
@@ -548,10 +610,11 @@ function SalesView() {
       />
 
       <Panel>
-        <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px] lg:items-center">
+        <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_180px] lg:items-center">
           <div className="flex flex-wrap gap-2">
             <SummaryPill label="Total" value={String(visibleSales.length)} />
             <SummaryPill label="Encargos" value={String(sales.filter((sale) => saleStatus(sale) === "encargado").length)} />
+            <SummaryPill label="Pagadas" value={String(sales.filter((sale) => salePaymentStatus(sale) === "pagado").length)} />
             <SummaryPill label="Vendido" value={currency(visibleSales.reduce((sum, sale) => sum + sale.amount, 0))} />
           </div>
           <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
@@ -559,11 +622,16 @@ function SalesView() {
             <option value="todos">Todos</option>
             {SALE_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
           </Select>
+          <Select
+            value={paymentStatusFilter}
+            onChange={(event) => setPaymentStatusFilter(event.target.value as SalePaymentFilter)}
+            aria-label="Filtrar por pago"
+          >
+            <option value="todos">Todos los pagos</option>
+            {SALE_PAYMENT_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+          </Select>
         </div>
       </Panel>
-
-      {message ? <SuccessMessage text={message} /> : null}
-      {error ? <ErrorMessage text={error} /> : null}
 
       <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
         <table className="w-full border-collapse text-left text-sm">
@@ -572,6 +640,7 @@ function SalesView() {
               <th className="px-4 py-3">Venta</th>
               <th className="px-4 py-3">Fecha</th>
               <th className="px-4 py-3">Pago</th>
+              <th className="px-4 py-3">Cobro</th>
               <th className="px-4 py-3">Estado</th>
               <th className="px-4 py-3 text-right">Total</th>
               <th className="px-4 py-3 text-right">Acciones</th>
@@ -579,7 +648,13 @@ function SalesView() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {visibleSales.map((sale) => (
-              <tr key={sale.id} className="hover:bg-slate-50">
+              <tr
+                key={sale.id}
+                className={cn(
+                  "transition",
+                  salePaymentStatus(sale) === "pagado" ? "bg-emerald-50/70 hover:bg-emerald-50" : "hover:bg-slate-50",
+                )}
+              >
                 <td className="px-4 py-3">
                   <p className="font-medium">{sale.detail}</p>
                   <p className="text-xs text-slate-500">{sale.seller ?? "Sin vendedor"} - {movementLocation(sale, products)}</p>
@@ -587,12 +662,18 @@ function SalesView() {
                 <td className="px-4 py-3 text-slate-600">{sale.date}</td>
                 <td className="px-4 py-3 text-slate-600">{sale.payment ?? "-"}</td>
                 <td className="px-4 py-3">
-                  <SaleStatusSelect value={saleStatus(sale)} onChange={(nextStatus) => void updateSaleStatus(sale.id, nextStatus)} />
+                  <SalePaymentStatusSelect
+                    value={salePaymentStatus(sale)}
+                    onChange={(nextPaymentStatus) => void changeSalePaymentStatus(sale, nextPaymentStatus)}
+                  />
+                </td>
+                <td className="px-4 py-3">
+                  <SaleStatusSelect value={saleStatus(sale)} onChange={(nextStatus) => void changeSaleStatus(sale, nextStatus)} />
                 </td>
                 <td className="px-4 py-3 text-right font-medium">{currency(sale.amount)}</td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end">
-                    <Button variant="ghost" size="icon" onClick={() => void removeSale(sale, deleteMovement)} aria-label="Eliminar venta">
+                    <Button variant="ghost" size="icon" onClick={() => void removeSale(sale, deleteMovement, notify)} aria-label="Eliminar venta">
                       <Trash2 className="h-4 w-4 text-red-600" />
                     </Button>
                   </div>
@@ -610,8 +691,9 @@ function SalesView() {
             key={sale.id}
             sale={sale}
             location={movementLocation(sale, products)}
-            onDelete={() => void removeSale(sale, deleteMovement)}
-            onStatusChange={(nextStatus) => void updateSaleStatus(sale.id, nextStatus)}
+            onDelete={() => void removeSale(sale, deleteMovement, notify)}
+            onStatusChange={(nextStatus) => void changeSaleStatus(sale, nextStatus)}
+            onPaymentStatusChange={(nextPaymentStatus) => void changeSalePaymentStatus(sale, nextPaymentStatus)}
           />
         ))}
         {!visibleSales.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
@@ -635,8 +717,13 @@ function SalesView() {
             <Input label="Precio venta" required type="number" min={1} step="0.01" value={salePrice} onChange={(event) => setSalePrice(event.target.value)} />
             <Input label="Fecha" required type="date" value={date} onChange={(event) => setDate(event.target.value)} />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Estado" value={status} onChange={(event) => setStatus(event.target.value as SaleStatus)}>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Select
+              label="Estado"
+              value={status}
+              className={saleStatusSelectClass(status)}
+              onChange={(event) => setStatus(event.target.value as SaleStatus)}
+            >
               {SALE_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
             </Select>
             <Select label="Pago" value={payment} onChange={(event) => setPayment(event.target.value)}>
@@ -645,6 +732,14 @@ function SalesView() {
               <option>Transferencia</option>
               <option>Tarjeta</option>
               <option>A definir</option>
+            </Select>
+            <Select
+              label="Estado de pago"
+              value={paymentStatus}
+              className={salePaymentStatusSelectClass(paymentStatus)}
+              onChange={(event) => setPaymentStatus(event.target.value as SalePaymentStatus)}
+            >
+              {SALE_PAYMENT_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
             </Select>
           </div>
           <Select label="Vendedor" value={seller} onChange={(event) => setSeller(event.target.value as (typeof VENDORS)[number])}>
@@ -678,6 +773,7 @@ function PurchasesView() {
   const products = useStockStore((state) => state.products);
   const movements = useStockStore((state) => state.movements);
   const registerPurchase = useStockStore((state) => state.registerPurchase);
+  const notify = useAlertStore((state) => state.notify);
   const [stockLocation, setStockLocation] = useState<LocationName>("Buenos Aires");
   const locationProducts = useMemo(
     () => products.filter((product) => productLocation(product) === stockLocation),
@@ -687,7 +783,6 @@ function PurchasesView() {
   const [quantity, setQuantity] = useState("1");
   const [unitCost, setUnitCost] = useState(locationProducts[0] ? String(locationProducts[0].cost) : "");
   const [date, setDate] = useState(today());
-  const [done, setDone] = useState("");
   const selected = locationProducts.find((product) => product.id === productId);
   const purchases = movements
     .filter((movement) => movement.type === "compra" && movementMatchesLocation(movement, products, stockLocation))
@@ -705,7 +800,7 @@ function PurchasesView() {
     const quantityValue = toPositiveInteger(quantity);
     const costValue = toPositiveNumber(unitCost);
     await registerPurchase({ productId, quantity: quantityValue, unitCost: costValue, date });
-    setDone("Stock actualizado.");
+    notify({ type: "success", title: "Stock actualizado", message: selected?.name });
   }
 
   return (
@@ -714,10 +809,10 @@ function PurchasesView() {
         <PageHeader title="Carga" description="Ingreso rapido de mercaderia." />
         <Panel title="Agregar stock">
           <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
-            <Select label="Ubicacion" value={stockLocation} onChange={(event) => { setStockLocation(event.target.value as LocationName); setDone(""); }}>
+            <Select label="Ubicacion" value={stockLocation} onChange={(event) => setStockLocation(event.target.value as LocationName)}>
               {LOCATIONS.map((location) => <option key={location} value={location}>{location}</option>)}
             </Select>
-            <Select label="Producto" value={productId} required onChange={(event) => { const product = locationProducts.find((item) => item.id === event.target.value); setProductId(event.target.value); setUnitCost(product ? String(product.cost) : ""); setDone(""); }}>
+            <Select label="Producto" value={productId} required onChange={(event) => { const product = locationProducts.find((item) => item.id === event.target.value); setProductId(event.target.value); setUnitCost(product ? String(product.cost) : ""); }}>
               {locationProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
             </Select>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -740,7 +835,6 @@ function PurchasesView() {
               Guardar carga
             </Button>
           </form>
-          {done ? <SuccessMessage text={done} /> : null}
         </Panel>
       </div>
 
@@ -753,6 +847,7 @@ function PurchasesView() {
 
 function PricesView() {
   const products = useStockStore((state) => state.products);
+  const notify = useAlertStore((state) => state.notify);
   const [generating, setGenerating] = useState(false);
   const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
   const availableProducts = products.filter((product) => product.stock > 0 && locationMatches(product, locationFilter));
@@ -761,8 +856,9 @@ function PricesView() {
     setGenerating(true);
     try {
       await downloadPricePdf(availableProducts);
+      notify({ type: "success", title: "PDF generado", message: `${availableProducts.length} productos` });
     } catch {
-      window.alert("No se pudo generar el PDF. Intentalo de nuevo.");
+      notify({ type: "error", title: "No pudimos generar el PDF", message: "Intentá de nuevo en unos segundos" });
     } finally {
       setGenerating(false);
     }
@@ -926,25 +1022,37 @@ function SaleCard({
   location,
   onDelete,
   onStatusChange,
+  onPaymentStatusChange,
 }: {
   sale: Movement;
   location: string;
   onDelete: () => void;
   onStatusChange: (status: SaleStatus) => void;
+  onPaymentStatusChange: (paymentStatus: SalePaymentStatus) => void;
 }) {
   const status = saleStatus(sale);
+  const paymentStatus = salePaymentStatus(sale);
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article
+      className={cn(
+        "rounded-xl border p-4 shadow-sm",
+        paymentStatus === "pagado" ? "border-emerald-200 bg-emerald-50/80" : "border-slate-200 bg-white",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <SaleStatusBadge status={status} />
+          <div className="flex flex-wrap gap-2">
+            <SalePaymentStatusBadge status={paymentStatus} />
+            <SaleStatusBadge status={status} />
+          </div>
           <p className="mt-2 break-words font-medium">{sale.detail}</p>
           <p className="mt-1 text-sm text-slate-500">{sale.date} - {sale.seller ?? "Sin vendedor"} - {location}</p>
         </div>
         <p className="shrink-0 font-semibold">{currency(sale.amount)}</p>
       </div>
-      <div className="mt-4 grid grid-cols-[1fr_auto] gap-2">
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+        <SalePaymentStatusSelect value={paymentStatus} onChange={onPaymentStatusChange} />
         <SaleStatusSelect value={status} onChange={onStatusChange} />
         <Button variant="ghost" size="icon" onClick={onDelete} aria-label="Eliminar venta">
           <Trash2 className="h-4 w-4 text-red-600" />
@@ -964,17 +1072,63 @@ function SaleStatusBadge({ status }: { status: SaleStatus }) {
   return <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium", badgeStyle)}>{label}</span>;
 }
 
+function SalePaymentStatusBadge({ status }: { status: SalePaymentStatus }) {
+  const styles: Record<SalePaymentStatus, string> = {
+    pagado: "bg-emerald-600 text-white",
+    no_pagado: "bg-amber-50 text-amber-700",
+  };
+  const label = SALE_PAYMENT_STATUSES.find((entry) => entry.id === status)?.label ?? "Pagado";
+  return <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium", styles[status])}>{label}</span>;
+}
+
 function SaleStatusSelect({ value, onChange }: { value: SaleStatus; onChange: (status: SaleStatus) => void }) {
   return (
     <select
       value={value}
       onChange={(event) => onChange(event.target.value as SaleStatus)}
-      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
+      className={cn(
+        "h-10 w-full rounded-lg border px-3 text-sm font-medium outline-none transition",
+        saleStatusSelectClass(value),
+      )}
       aria-label="Cambiar estado"
     >
       {SALE_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
     </select>
   );
+}
+
+function saleStatusSelectClass(status: SaleStatus) {
+  return status === "entregado"
+    ? "border-emerald-700 bg-emerald-600 text-white focus:border-emerald-800 focus:ring-2 focus:ring-emerald-200"
+    : "border-sky-700 bg-sky-600 text-white focus:border-sky-800 focus:ring-2 focus:ring-sky-200";
+}
+
+function SalePaymentStatusSelect({
+  value,
+  onChange,
+}: {
+  value: SalePaymentStatus;
+  onChange: (status: SalePaymentStatus) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value as SalePaymentStatus)}
+      className={cn(
+        "h-10 w-full rounded-lg border px-3 text-sm font-medium outline-none transition",
+        salePaymentStatusSelectClass(value),
+      )}
+      aria-label="Cambiar estado de pago"
+    >
+      {SALE_PAYMENT_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+    </select>
+  );
+}
+
+function salePaymentStatusSelectClass(status: SalePaymentStatus) {
+  return status === "pagado"
+    ? "border-emerald-700 bg-emerald-600 text-white focus:border-emerald-800 focus:ring-2 focus:ring-emerald-200"
+    : "border-slate-300 bg-white text-slate-950 focus:border-slate-500 focus:ring-2 focus:ring-slate-100";
 }
 
 function ActivityList({ movements }: { movements: Movement[] }) {
@@ -1005,7 +1159,7 @@ function ProductModal({
   open: boolean;
   product: Product | null;
   onClose: () => void;
-  onSubmit: (values: Omit<Product, "id" | "sold">) => void;
+  onSubmit: (values: Omit<Product, "id" | "sold">) => void | Promise<void>;
 }) {
   const [form, setForm] = useState({ name: "", brand: "", location: "", cost: "", price: "", stock: "" });
 
@@ -1086,22 +1240,38 @@ function EmptyState({ title, text }: { title: string; text: string }) {
   );
 }
 
-async function confirmDelete(product: Product, deleteProduct: (id: string) => Promise<void>) {
+async function saveStock(
+  product: Product,
+  stock: number,
+  updateStock: (id: string, stock: number) => Promise<void>,
+  notify: Notify,
+) {
+  await updateStock(product.id, stock);
+  notify({ type: "success", title: "Stock actualizado", message: product.name });
+}
+
+async function confirmDelete(product: Product, deleteProduct: (id: string) => Promise<void>, notify: Notify) {
   const ok = window.confirm(`Eliminar ${product.name}?`);
   if (!ok) return;
   await deleteProduct(product.id);
+  notify({ type: "success", title: "Producto eliminado", message: product.name });
 }
 
-async function removeSale(sale: Movement, deleteMovement: (id: string) => Promise<void>) {
+async function removeSale(sale: Movement, deleteMovement: (id: string) => Promise<void>, notify: Notify) {
   const ok = window.confirm("Eliminar esta venta? El stock se devuelve automaticamente.");
   if (!ok) return;
   await deleteMovement(sale.id);
+  notify({ type: "success", title: "Venta eliminada", message: "El stock fue devuelto" });
 }
 
 function saleStatus(movement: Movement): SaleStatus {
   const status = movement.status as string;
   if (status === "encargado" || status === "pendiente") return "encargado";
   return "entregado";
+}
+
+function salePaymentStatus(movement: Movement): SalePaymentStatus {
+  return movement.paymentStatus === "no_pagado" ? "no_pagado" : "pagado";
 }
 
 function locationMatches(product: Product, filter: LocationFilter) {

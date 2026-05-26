@@ -18,6 +18,7 @@ export type Movement = {
   productId?: string;
   quantity?: number;
   status?: "entregado" | "encargado";
+  paymentStatus?: "pagado" | "no_pagado";
   title: string;
   detail: string;
   amount: number;
@@ -42,6 +43,7 @@ export type SaleInput = {
   payment: string;
   date: string;
   status: "entregado" | "encargado";
+  paymentStatus: "pagado" | "no_pagado";
 };
 
 export type ProductInput = Omit<Product, "id" | "sold">;
@@ -69,6 +71,7 @@ export const seedMovements: Movement[] = [
     seller: "Julian",
     payment: "Mercado Pago",
     status: "entregado",
+    paymentStatus: "pagado",
   },
   {
     id: "m2",
@@ -94,5 +97,6 @@ export const seedMovements: Movement[] = [
     seller: "Santiago",
     payment: "Efectivo",
     status: "entregado",
+    paymentStatus: "no_pagado",
   },
 ];

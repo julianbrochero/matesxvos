@@ -60,6 +60,7 @@ create table if not exists public.movements (
   date date not null default current_date,
   seller text,
   payment text,
+  paid boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -68,6 +69,9 @@ add column if not exists status text check (status in ('pendiente', 'entregado',
 
 alter table public.movements
 add column if not exists quantity integer check (quantity is null or quantity > 0);
+
+alter table public.movements
+add column if not exists paid boolean not null default true;
 
 update public.movements
 set status = 'entregado'
@@ -139,6 +143,8 @@ begin
 end;
 $$;
 
+drop function if exists public.register_sale(uuid, integer, text, text, date, text, numeric);
+
 create or replace function public.register_sale(
   p_product_id uuid,
   p_quantity integer,
@@ -146,7 +152,8 @@ create or replace function public.register_sale(
   p_payment text,
   p_date date,
   p_status text default 'entregado',
-  p_unit_price numeric default null
+  p_unit_price numeric default null,
+  p_paid boolean default true
 )
 returns jsonb
 language plpgsql
@@ -193,7 +200,7 @@ begin
       sold = sold + p_quantity
   where id = p_product_id;
 
-  insert into public.movements (product_id, type, quantity, status, title, detail, amount, profit, date, seller, payment)
+  insert into public.movements (product_id, type, quantity, status, title, detail, amount, profit, date, seller, payment, paid)
   values (
     p_product_id,
     'venta',
@@ -205,7 +212,8 @@ begin
     v_profit,
     p_date,
     p_seller,
-    p_payment
+    p_payment,
+    coalesce(p_paid, true)
   );
 
   return jsonb_build_object('ok', true, 'amount', v_amount, 'profit', v_profit);
@@ -225,12 +233,12 @@ from (
 ) as seed(name, brand, location, cost, price, stock, min_stock, sold)
 where not exists (select 1 from public.products);
 
-insert into public.movements (type, status, title, detail, amount, profit, date, seller, payment)
+insert into public.movements (type, status, title, detail, amount, profit, date, seller, payment, paid)
 select *
 from (
   values
-    ('venta', 'entregado', 'Venta registrada', '3 Baldo 1kg por Mercado Pago', 51000, 15000, current_date, 'Julian', 'Mercado Pago'),
-    ('compra', null, 'Ingreso de mercadería', '20 Playadito 1kg al stock', 144000, 0, current_date - 1, null, null),
-    ('venta', 'entregado', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Santiago', 'Efectivo')
-) as seed(type, status, title, detail, amount, profit, date, seller, payment)
+    ('venta', 'entregado', 'Venta registrada', '3 Baldo 1kg por Mercado Pago', 51000, 15000, current_date, 'Julian', 'Mercado Pago', true),
+    ('compra', null, 'Ingreso de mercadería', '20 Playadito 1kg al stock', 144000, 0, current_date - 1, null, null, true),
+    ('venta', 'entregado', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Santiago', 'Efectivo', false)
+) as seed(type, status, title, detail, amount, profit, date, seller, payment, paid)
 where not exists (select 1 from public.movements);
