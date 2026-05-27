@@ -483,15 +483,8 @@ export const useStockStore = create<StockState>()(
           await get().hydrate();
           return true;
         } catch (error) {
-          if (!LOCAL_MODE_ENABLED) {
-            set({ error: remoteError(error) });
-            return false;
-          }
-          set((state) => ({
-            ...localUpdateSale(movementId, input, state),
-            error: error instanceof Error ? error.message : "",
-          }));
-          return true;
+          set({ error: remoteError(error) });
+          return false;
         }
       },
       updateSaleStatus: async (movementId, status) => {

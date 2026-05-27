@@ -616,7 +616,11 @@ function SalesView() {
       });
       return;
     }
-    notify({ type: "success", title: "Venta actualizada", message: sale.detail });
+    notify({
+      type: "success",
+      title: "Venta actualizada",
+      message: `${input.customer?.trim() || "Sin cliente"} - ${saleProductLabel(sale, products)}`,
+    });
     setEditingSale(null);
   }
 
@@ -1192,7 +1196,7 @@ function SaleSummary({ sale, products }: { sale: Movement; products: Product[] }
   return (
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex max-w-full rounded-md bg-slate-950 px-2.5 py-1 text-xs font-semibold text-white">
+        <span className="inline-flex max-w-full rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
           <span className="truncate">{sale.customer ? sale.customer : "Sin cliente"}</span>
         </span>
       </div>
