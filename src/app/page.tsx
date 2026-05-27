@@ -607,7 +607,15 @@ function SalesView() {
   }
 
   async function saveSaleEdit(sale: Movement, input: SaleUpdateInput) {
-    await updateSale(sale.id, input);
+    const ok = await updateSale(sale.id, input);
+    if (!ok) {
+      notify({
+        type: "error",
+        title: "No se pudo guardar la venta",
+        message: "Revisá que esté aplicado el SQL de cliente en Supabase.",
+      });
+      return;
+    }
     notify({ type: "success", title: "Venta actualizada", message: sale.detail });
     setEditingSale(null);
   }
@@ -677,9 +685,7 @@ function SalesView() {
                 )}
               >
                 <td className="px-4 py-3">
-                  <p className="font-medium">{sale.detail}</p>
-                  {sale.customer ? <p className="text-xs font-medium text-slate-700">Cliente: {sale.customer}</p> : null}
-                  <p className="text-xs text-slate-500">{sale.seller ?? "Sin vendedor"} - {movementLocation(sale, products)}</p>
+                  <SaleSummary sale={sale} products={products} />
                 </td>
                 <td className="px-4 py-3 text-slate-600">{sale.date}</td>
                 <td className="px-4 py-3 text-slate-600">{sale.payment ?? "-"}</td>
@@ -718,6 +724,7 @@ function SalesView() {
           <SaleCard
             key={sale.id}
             sale={sale}
+            products={products}
             location={movementLocation(sale, products)}
             actionMenuOpen={actionMenuId === sale.id}
             onActionMenuToggle={() => setActionMenuId(actionMenuId === sale.id ? "" : sale.id)}
@@ -1088,6 +1095,7 @@ function StockEditor({ product, onSave }: { product: Product; onSave: (stock: nu
 
 function SaleCard({
   sale,
+  products,
   location,
   actionMenuOpen,
   onActionMenuToggle,
@@ -1097,6 +1105,7 @@ function SaleCard({
   onPaymentStatusChange,
 }: {
   sale: Movement;
+  products: Product[];
   location: string;
   actionMenuOpen: boolean;
   onActionMenuToggle: () => void;
@@ -1121,8 +1130,9 @@ function SaleCard({
             <SalePaymentStatusBadge status={paymentStatus} />
             <SaleStatusBadge status={status} />
           </div>
-          <p className="mt-2 break-words font-medium">{sale.detail}</p>
-          {sale.customer ? <p className="mt-1 text-sm font-medium text-slate-700">Cliente: {sale.customer}</p> : null}
+          <div className="mt-2">
+            <SaleSummary sale={sale} products={products} />
+          </div>
           <p className="mt-1 text-sm text-slate-500">{sale.date} - {sale.seller ?? "Sin vendedor"} - {location}</p>
         </div>
         <div className="grid justify-items-end gap-2">
@@ -1174,6 +1184,20 @@ function SaleActionMenu({
           </button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function SaleSummary({ sale, products }: { sale: Movement; products: Product[] }) {
+  return (
+    <div className="min-w-0">
+      <p className="break-words font-semibold text-slate-950">
+        Cliente: {sale.customer ? sale.customer : "-"}
+      </p>
+      <p className="mt-0.5 break-words text-sm font-medium text-slate-700">
+        Producto: {saleProductLabel(sale, products)}
+      </p>
+      <p className="mt-0.5 text-xs text-slate-500">{sale.detail}</p>
     </div>
   );
 }
@@ -1470,6 +1494,13 @@ function saleStatus(movement: Movement): SaleStatus {
 
 function salePaymentStatus(movement: Movement): SalePaymentStatus {
   return movement.paymentStatus === "no_pagado" ? "no_pagado" : "pagado";
+}
+
+function saleProductLabel(movement: Movement, products: Product[]) {
+  const product = products.find((item) => item.id === movement.productId);
+  if (product) return `${movement.quantity ? `${movement.quantity} ` : ""}${product.name}`;
+
+  return movement.detail.replace(/\s+por\s+.+$/i, "");
 }
 
 function locationMatches(product: Product, filter: LocationFilter) {

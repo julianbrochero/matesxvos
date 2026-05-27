@@ -34,7 +34,7 @@ type StockState = {
   updateStock: (id: string, stock: number) => Promise<void>;
   registerPurchase: (input: PurchaseInput) => Promise<void>;
   registerSale: (input: SaleInput) => Promise<boolean>;
-  updateSale: (id: string, input: SaleUpdateInput) => Promise<void>;
+  updateSale: (id: string, input: SaleUpdateInput) => Promise<boolean>;
   updateSaleStatus: (id: string, status: NonNullable<Movement["status"]>) => Promise<void>;
   updateSalePaymentStatus: (id: string, paymentStatus: NonNullable<Movement["paymentStatus"]>) => Promise<void>;
   deleteMovement: (id: string) => Promise<void>;
@@ -469,10 +469,10 @@ export const useStockStore = create<StockState>()(
         if (!get().remote) {
           if (!LOCAL_MODE_ENABLED) {
             set({ error: DATABASE_CONNECTION_ERROR });
-            return;
+            return false;
           }
           set((state) => localUpdateSale(movementId, input, state));
-          return;
+          return true;
         }
 
         try {
@@ -481,15 +481,17 @@ export const useStockStore = create<StockState>()(
             body: JSON.stringify(input),
           });
           await get().hydrate();
+          return true;
         } catch (error) {
           if (!LOCAL_MODE_ENABLED) {
             set({ error: remoteError(error) });
-            return;
+            return false;
           }
           set((state) => ({
             ...localUpdateSale(movementId, input, state),
             error: error instanceof Error ? error.message : "",
           }));
+          return true;
         }
       },
       updateSaleStatus: async (movementId, status) => {
