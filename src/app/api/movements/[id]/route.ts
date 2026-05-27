@@ -36,26 +36,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const updates: {
-    status?: string;
-    paid?: boolean;
-    seller?: string;
-    payment?: string;
-    customer?: string | null;
-    date?: string;
-  } = {};
-  if (parsed.data.status) updates.status = toDatabaseSaleStatus(parsed.data.status);
-  if (parsed.data.paymentStatus) updates.paid = parsed.data.paymentStatus === "pagado";
-  if (parsed.data.seller) updates.seller = parsed.data.seller;
-  if (parsed.data.payment) updates.payment = parsed.data.payment;
-  if (parsed.data.customer !== undefined) updates.customer = parsed.data.customer || null;
-  if (parsed.data.date) updates.date = parsed.data.date;
-
-  const { error } = await getSupabaseAdmin()
-    .from("movements")
-    .update(updates)
-    .eq("id", id)
-    .eq("type", "venta");
+  const { error } = await getSupabaseAdmin().rpc("update_sale_details", {
+    p_movement_id: id,
+    p_seller: parsed.data.seller ?? null,
+    p_payment: parsed.data.payment ?? null,
+    p_date: parsed.data.date ?? null,
+    p_status: parsed.data.status ? toDatabaseSaleStatus(parsed.data.status) : null,
+    p_paid: parsed.data.paymentStatus ? parsed.data.paymentStatus === "pagado" : null,
+    p_customer: parsed.data.customer ?? null,
+    p_clear_customer: parsed.data.customer !== undefined && !parsed.data.customer,
+  });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
