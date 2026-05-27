@@ -168,7 +168,7 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
 }
 
 function localRegisterSale(
-  { productId, quantity, unitPrice, seller, payment, date, status, paymentStatus }: SaleInput,
+  { productId, quantity, unitPrice, seller, payment, customer, date, status, paymentStatus }: SaleInput,
   state: StockState,
 ) {
   const product = state.products.find((item) => item.id === productId);
@@ -197,6 +197,7 @@ function localRegisterSale(
         date,
         seller,
         payment,
+        customer: customer?.trim() || undefined,
         status,
         paymentStatus,
       },

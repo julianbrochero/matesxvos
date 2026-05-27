@@ -522,6 +522,7 @@ function SalesView() {
   const [salePrice, setSalePrice] = useState("");
   const [seller, setSeller] = useState<(typeof VENDORS)[number]>("Julian");
   const [payment, setPayment] = useState("Mercado Pago");
+  const [customer, setCustomer] = useState("");
   const [status, setStatus] = useState<SaleStatus>("entregado");
   const [paymentStatus, setPaymentStatus] = useState<SalePaymentStatus>("pagado");
   const [date, setDate] = useState(today());
@@ -566,6 +567,7 @@ function SalesView() {
       unitPrice: unitPriceValue,
       seller,
       payment,
+      customer: customer.trim() || undefined,
       date,
       status,
       paymentStatus,
@@ -578,6 +580,7 @@ function SalesView() {
     setModalOpen(false);
     setQuantity("1");
     setSalePrice(selectedPrice ? String(selectedPrice) : "");
+    setCustomer("");
     setStatus("entregado");
     setPaymentStatus("pagado");
   }
@@ -657,6 +660,7 @@ function SalesView() {
               >
                 <td className="px-4 py-3">
                   <p className="font-medium">{sale.detail}</p>
+                  {sale.customer ? <p className="text-xs font-medium text-slate-700">Cliente: {sale.customer}</p> : null}
                   <p className="text-xs text-slate-500">{sale.seller ?? "Sin vendedor"} - {movementLocation(sale, products)}</p>
                 </td>
                 <td className="px-4 py-3 text-slate-600">{sale.date}</td>
@@ -745,6 +749,12 @@ function SalesView() {
           <Select label="Vendedor" value={seller} onChange={(event) => setSeller(event.target.value as (typeof VENDORS)[number])}>
             {VENDORS.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
           </Select>
+          <Input
+            label="Cliente (opcional)"
+            placeholder="Nombre del cliente"
+            value={customer}
+            onChange={(event) => setCustomer(event.target.value)}
+          />
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
             <div className="flex justify-between gap-3">
               <span className="text-slate-500">Disponible</span>
@@ -1047,6 +1057,7 @@ function SaleCard({
             <SaleStatusBadge status={status} />
           </div>
           <p className="mt-2 break-words font-medium">{sale.detail}</p>
+          {sale.customer ? <p className="mt-1 text-sm font-medium text-slate-700">Cliente: {sale.customer}</p> : null}
           <p className="mt-1 text-sm text-slate-500">{sale.date} - {sale.seller ?? "Sin vendedor"} - {location}</p>
         </div>
         <p className="shrink-0 font-semibold">{currency(sale.amount)}</p>

@@ -9,6 +9,7 @@ const saleSchema = z.object({
   unitPrice: z.coerce.number().positive(),
   seller: z.string().min(1),
   payment: z.string().min(1),
+  customer: z.string().trim().optional().transform((value) => value || null),
   date: z.string().min(1),
   status: z.enum(["entregado", "encargado"]).default("entregado"),
   paymentStatus: z.enum(["pagado", "no_pagado"]).default("pagado"),
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
     p_status: toDatabaseSaleStatus(parsed.data.status),
     p_unit_price: parsed.data.unitPrice,
     p_paid: parsed.data.paymentStatus === "pagado",
+    p_customer: parsed.data.customer,
   });
 
   if (error) {

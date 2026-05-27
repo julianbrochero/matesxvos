@@ -60,6 +60,7 @@ create table if not exists public.movements (
   date date not null default current_date,
   seller text,
   payment text,
+  customer text,
   paid boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -72,6 +73,9 @@ add column if not exists quantity integer check (quantity is null or quantity > 
 
 alter table public.movements
 add column if not exists paid boolean default true;
+
+alter table public.movements
+add column if not exists customer text;
 
 update public.movements
 set paid = true
@@ -153,6 +157,7 @@ begin
 end;
 $$;
 
+drop function if exists public.register_sale(uuid, integer, text, text, date, text, numeric, boolean, text);
 drop function if exists public.register_sale(uuid, integer, text, text, date, text, numeric, boolean);
 drop function if exists public.register_sale(uuid, integer, text, text, date, text, numeric);
 drop function if exists public.register_sale(uuid, integer, text, text, date, text);
@@ -165,7 +170,8 @@ create or replace function public.register_sale(
   p_date date,
   p_status text default 'entregado',
   p_unit_price numeric default null,
-  p_paid boolean default true
+  p_paid boolean default true,
+  p_customer text default null
 )
 returns jsonb
 language plpgsql
@@ -212,7 +218,7 @@ begin
       sold = sold + p_quantity
   where id = p_product_id;
 
-  insert into public.movements (product_id, type, quantity, status, title, detail, amount, profit, date, seller, payment, paid)
+  insert into public.movements (product_id, type, quantity, status, title, detail, amount, profit, date, seller, payment, paid, customer)
   values (
     p_product_id,
     'venta',
@@ -225,7 +231,8 @@ begin
     p_date,
     p_seller,
     p_payment,
-    coalesce(p_paid, true)
+    coalesce(p_paid, true),
+    nullif(trim(coalesce(p_customer, '')), '')
   );
 
   return jsonb_build_object('ok', true, 'amount', v_amount, 'profit', v_profit);

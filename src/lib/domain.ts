@@ -26,6 +26,7 @@ export type Movement = {
   date: string;
   seller?: string;
   payment?: string;
+  customer?: string;
 };
 
 export type PurchaseInput = {
@@ -41,6 +42,7 @@ export type SaleInput = {
   unitPrice: number;
   seller: string;
   payment: string;
+  customer?: string;
   date: string;
   status: "entregado" | "encargado";
   paymentStatus: "pagado" | "no_pagado";
@@ -70,6 +72,7 @@ export const seedMovements: Movement[] = [
     date: today(),
     seller: "Julian",
     payment: "Mercado Pago",
+    customer: "Cliente mostrador",
     status: "entregado",
     paymentStatus: "pagado",
   },
@@ -96,6 +99,7 @@ export const seedMovements: Movement[] = [
     date: "2026-05-16",
     seller: "Santiago",
     payment: "Efectivo",
+    customer: "Martina",
     status: "entregado",
     paymentStatus: "no_pagado",
   },
