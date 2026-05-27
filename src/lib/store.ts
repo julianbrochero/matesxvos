@@ -8,12 +8,13 @@ import {
   type ProductInput,
   type PurchaseInput,
   type SaleInput,
+  type SaleUpdateInput,
   seedMovements,
   seedProducts,
 } from "@/lib/domain";
 import { today } from "@/lib/utils";
 
-export type { Movement, Product, ProductInput, PurchaseInput, SaleInput } from "@/lib/domain";
+export type { Movement, Product, ProductInput, PurchaseInput, SaleInput, SaleUpdateInput } from "@/lib/domain";
 
 type BootstrapPayload = {
   products: Product[];
@@ -33,6 +34,7 @@ type StockState = {
   updateStock: (id: string, stock: number) => Promise<void>;
   registerPurchase: (input: PurchaseInput) => Promise<void>;
   registerSale: (input: SaleInput) => Promise<boolean>;
+  updateSale: (id: string, input: SaleUpdateInput) => Promise<void>;
   updateSaleStatus: (id: string, status: NonNullable<Movement["status"]>) => Promise<void>;
   updateSalePaymentStatus: (id: string, paymentStatus: NonNullable<Movement["paymentStatus"]>) => Promise<void>;
   deleteMovement: (id: string) => Promise<void>;
@@ -210,6 +212,16 @@ function localUpdateSaleStatus(movementId: string, status: NonNullable<Movement[
   return {
     movements: state.movements.map((movement) =>
       movement.id === movementId && movement.type === "venta" ? { ...movement, status } : movement,
+    ),
+  };
+}
+
+function localUpdateSale(movementId: string, input: SaleUpdateInput, state: StockState) {
+  return {
+    movements: state.movements.map((movement) =>
+      movement.id === movementId && movement.type === "venta"
+        ? { ...movement, ...input, customer: input.customer?.trim() || undefined }
+        : movement,
     ),
   };
 }
@@ -451,6 +463,33 @@ export const useStockStore = create<StockState>()(
           if (!next) return false;
           set({ ...next, error: error instanceof Error ? error.message : "" });
           return true;
+        }
+      },
+      updateSale: async (movementId, input) => {
+        if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return;
+          }
+          set((state) => localUpdateSale(movementId, input, state));
+          return;
+        }
+
+        try {
+          await apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
+            method: "PATCH",
+            body: JSON.stringify(input),
+          });
+          await get().hydrate();
+        } catch (error) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return;
+          }
+          set((state) => ({
+            ...localUpdateSale(movementId, input, state),
+            error: error instanceof Error ? error.message : "",
+          }));
         }
       },
       updateSaleStatus: async (movementId, status) => {

@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  MoreVertical,
   PackagePlus,
   Plus,
   Search,
@@ -26,7 +27,7 @@ import { Select } from "@/components/ui/select";
 import { AlertToaster } from "@/components/ui/alert-toaster";
 import { type AlertType, useAlertStore } from "@/lib/alerts";
 import { cn, currency, today } from "@/lib/utils";
-import { Movement, Product, useStockStore } from "@/lib/store";
+import { Movement, Product, type SaleUpdateInput, useStockStore } from "@/lib/store";
 
 type View = "dashboard" | "stock" | "carga" | "ventas" | "precios";
 type LocationName = "Buenos Aires" | "Villa Maria";
@@ -40,6 +41,7 @@ type Notify = (alert: { type: AlertType; title: string; message?: string; persis
 const LOW_STOCK_LIMIT = 5;
 const LOCATIONS: LocationName[] = ["Buenos Aires", "Villa Maria"];
 const VENDORS = ["Julian", "Santiago"] as const;
+const PAYMENT_METHODS = ["Mercado Pago", "Efectivo", "Transferencia", "Tarjeta", "A definir"] as const;
 const SALE_STATUSES: { id: SaleStatus; label: string }[] = [
   { id: "entregado", label: "Entregado" },
   { id: "encargado", label: "Encargado" },
@@ -508,11 +510,14 @@ function SalesView() {
   const products = useStockStore((state) => state.products);
   const movements = useStockStore((state) => state.movements);
   const registerSale = useStockStore((state) => state.registerSale);
+  const updateSale = useStockStore((state) => state.updateSale);
   const updateSaleStatus = useStockStore((state) => state.updateSaleStatus);
   const updateSalePaymentStatus = useStockStore((state) => state.updateSalePaymentStatus);
   const deleteMovement = useStockStore((state) => state.deleteMovement);
   const notify = useAlertStore((state) => state.notify);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingSale, setEditingSale] = useState<Movement | null>(null);
+  const [actionMenuId, setActionMenuId] = useState("");
   const [statusFilter, setStatusFilter] = useState<SaleFilter>("todos");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<SalePaymentFilter>("todos");
   const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
@@ -599,6 +604,17 @@ function SalesView() {
     });
   }
 
+  async function saveSaleEdit(sale: Movement, input: SaleUpdateInput) {
+    await updateSale(sale.id, input);
+    notify({ type: "success", title: "Venta actualizada", message: sale.detail });
+    setEditingSale(null);
+  }
+
+  function openSaleEdit(sale: Movement) {
+    setEditingSale(sale);
+    setActionMenuId("");
+  }
+
   return (
     <section className="grid gap-5">
       <PageHeader
@@ -677,9 +693,15 @@ function SalesView() {
                 <td className="px-4 py-3 text-right font-medium">{currency(sale.amount)}</td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end">
-                    <Button variant="ghost" size="icon" onClick={() => void removeSale(sale, deleteMovement, notify)} aria-label="Eliminar venta">
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    </Button>
+                    <SaleActionMenu
+                      open={actionMenuId === sale.id}
+                      onToggle={() => setActionMenuId(actionMenuId === sale.id ? "" : sale.id)}
+                      onEdit={() => openSaleEdit(sale)}
+                      onDelete={() => {
+                        setActionMenuId("");
+                        void removeSale(sale, deleteMovement, notify);
+                      }}
+                    />
                   </div>
                 </td>
               </tr>
@@ -695,7 +717,13 @@ function SalesView() {
             key={sale.id}
             sale={sale}
             location={movementLocation(sale, products)}
-            onDelete={() => void removeSale(sale, deleteMovement, notify)}
+            actionMenuOpen={actionMenuId === sale.id}
+            onActionMenuToggle={() => setActionMenuId(actionMenuId === sale.id ? "" : sale.id)}
+            onEdit={() => openSaleEdit(sale)}
+            onDelete={() => {
+              setActionMenuId("");
+              void removeSale(sale, deleteMovement, notify);
+            }}
             onStatusChange={(nextStatus) => void changeSaleStatus(sale, nextStatus)}
             onPaymentStatusChange={(nextPaymentStatus) => void changeSalePaymentStatus(sale, nextPaymentStatus)}
           />
@@ -731,11 +759,7 @@ function SalesView() {
               {SALE_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
             </Select>
             <Select label="Pago" value={payment} onChange={(event) => setPayment(event.target.value)}>
-              <option>Mercado Pago</option>
-              <option>Efectivo</option>
-              <option>Transferencia</option>
-              <option>Tarjeta</option>
-              <option>A definir</option>
+              {PAYMENT_METHODS.map((method) => <option key={method}>{method}</option>)}
             </Select>
             <Select
               label="Estado de pago"
@@ -775,6 +799,14 @@ function SalesView() {
           </Button>
         </form>
       </Modal>
+
+      <SaleEditModal
+        sale={editingSale}
+        onClose={() => setEditingSale(null)}
+        onSubmit={(input) => {
+          if (editingSale) void saveSaleEdit(editingSale, input);
+        }}
+      />
     </section>
   );
 }
@@ -1030,12 +1062,18 @@ function StockEditor({ product, onSave }: { product: Product; onSave: (stock: nu
 function SaleCard({
   sale,
   location,
+  actionMenuOpen,
+  onActionMenuToggle,
+  onEdit,
   onDelete,
   onStatusChange,
   onPaymentStatusChange,
 }: {
   sale: Movement;
   location: string;
+  actionMenuOpen: boolean;
+  onActionMenuToggle: () => void;
+  onEdit: () => void;
   onDelete: () => void;
   onStatusChange: (status: SaleStatus) => void;
   onPaymentStatusChange: (paymentStatus: SalePaymentStatus) => void;
@@ -1060,16 +1098,138 @@ function SaleCard({
           {sale.customer ? <p className="mt-1 text-sm font-medium text-slate-700">Cliente: {sale.customer}</p> : null}
           <p className="mt-1 text-sm text-slate-500">{sale.date} - {sale.seller ?? "Sin vendedor"} - {location}</p>
         </div>
-        <p className="shrink-0 font-semibold">{currency(sale.amount)}</p>
+        <div className="grid justify-items-end gap-2">
+          <p className="shrink-0 font-semibold">{currency(sale.amount)}</p>
+          <SaleActionMenu open={actionMenuOpen} onToggle={onActionMenuToggle} onEdit={onEdit} onDelete={onDelete} />
+        </div>
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <SalePaymentStatusSelect value={paymentStatus} onChange={onPaymentStatusChange} />
         <SaleStatusSelect value={status} onChange={onStatusChange} />
-        <Button variant="ghost" size="icon" onClick={onDelete} aria-label="Eliminar venta">
-          <Trash2 className="h-4 w-4 text-red-600" />
-        </Button>
       </div>
     </article>
+  );
+}
+
+function SaleActionMenu({
+  open,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="relative">
+      <Button type="button" variant="ghost" size="icon" onClick={onToggle} aria-label="Acciones de venta">
+        <MoreVertical className="h-4 w-4" />
+      </Button>
+      {open ? (
+        <div className="absolute right-0 top-11 z-20 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+          >
+            <Edit3 className="h-4 w-4" />
+            Editar
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-700 hover:bg-red-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            Eliminar
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SaleEditModal({
+  sale,
+  onClose,
+  onSubmit,
+}: {
+  sale: Movement | null;
+  onClose: () => void;
+  onSubmit: (input: SaleUpdateInput) => void;
+}) {
+  const [seller, setSeller] = useState<(typeof VENDORS)[number]>("Julian");
+  const [payment, setPayment] = useState<(typeof PAYMENT_METHODS)[number]>("Mercado Pago");
+  const [customer, setCustomer] = useState("");
+  const [date, setDate] = useState(today());
+  const [status, setStatus] = useState<SaleStatus>("entregado");
+  const [paymentStatus, setPaymentStatus] = useState<SalePaymentStatus>("pagado");
+
+  useEffect(() => {
+    if (!sale) return;
+    setSeller(VENDORS.includes(sale.seller as (typeof VENDORS)[number]) ? (sale.seller as (typeof VENDORS)[number]) : "Julian");
+    setPayment(
+      PAYMENT_METHODS.includes(sale.payment as (typeof PAYMENT_METHODS)[number])
+        ? (sale.payment as (typeof PAYMENT_METHODS)[number])
+        : "A definir",
+    );
+    setCustomer(sale.customer ?? "");
+    setDate(sale.date);
+    setStatus(saleStatus(sale));
+    setPaymentStatus(salePaymentStatus(sale));
+  }, [sale]);
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    onSubmit({
+      seller,
+      payment,
+      customer: customer.trim(),
+      date,
+      status,
+      paymentStatus,
+    });
+  }
+
+  return (
+    <Modal open={Boolean(sale)} title="Editar venta" subtitle={sale?.detail} onClose={onClose}>
+      <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
+        <Input label="Cliente (opcional)" value={customer} onChange={(event) => setCustomer(event.target.value)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input label="Fecha" required type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+          <Select label="Vendedor" value={seller} onChange={(event) => setSeller(event.target.value as (typeof VENDORS)[number])}>
+            {VENDORS.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
+          </Select>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Select label="Pago" value={payment} onChange={(event) => setPayment(event.target.value as (typeof PAYMENT_METHODS)[number])}>
+            {PAYMENT_METHODS.map((method) => <option key={method}>{method}</option>)}
+          </Select>
+          <Select
+            label="Cobro"
+            value={paymentStatus}
+            className={salePaymentStatusSelectClass(paymentStatus)}
+            onChange={(event) => setPaymentStatus(event.target.value as SalePaymentStatus)}
+          >
+            {SALE_PAYMENT_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+          </Select>
+          <Select
+            label="Estado"
+            value={status}
+            className={saleStatusSelectClass(status)}
+            onChange={(event) => setStatus(event.target.value as SaleStatus)}
+          >
+            {SALE_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+          </Select>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button type="submit">Guardar cambios</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -1370,10 +1530,9 @@ async function downloadPricePdf(products: Product[]) {
 
   autoTable(doc, {
     startY: 130,
-    head: [["Producto", "Marca", "Ubicacion", "Precio"]],
+    head: [["Producto", "Ubicacion", "Precio"]],
     body: products.map((product) => [
       product.name,
-      product.brand,
       productLocation(product),
       currency(product.price),
     ]),
@@ -1396,7 +1555,7 @@ async function downloadPricePdf(products: Product[]) {
       fillColor: [248, 250, 252],
     },
     columnStyles: {
-      3: { halign: "right", fontStyle: "bold" },
+      2: { halign: "right", fontStyle: "bold" },
     },
     didDrawPage: () => {
       doc.setFont("helvetica", "normal");

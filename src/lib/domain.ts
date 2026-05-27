@@ -48,6 +48,15 @@ export type SaleInput = {
   paymentStatus: "pagado" | "no_pagado";
 };
 
+export type SaleUpdateInput = {
+  seller: string;
+  payment: string;
+  customer?: string;
+  date: string;
+  status: "entregado" | "encargado";
+  paymentStatus: "pagado" | "no_pagado";
+};
+
 export type ProductInput = Omit<Product, "id" | "sold">;
 
 export const seedProducts: Product[] = [

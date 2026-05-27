@@ -10,7 +10,11 @@ type Params = {
 const patchSchema = z.object({
   status: z.enum(["entregado", "encargado"]).optional(),
   paymentStatus: z.enum(["pagado", "no_pagado"]).optional(),
-}).refine((value) => value.status || value.paymentStatus, {
+  seller: z.string().min(1).optional(),
+  payment: z.string().min(1).optional(),
+  customer: z.string().trim().nullable().optional(),
+  date: z.string().min(1).optional(),
+}).refine((value) => Object.values(value).some((entry) => entry !== undefined), {
   message: "Al menos un estado es requerido",
 });
 
@@ -32,9 +36,20 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const updates: { status?: string; paid?: boolean } = {};
+  const updates: {
+    status?: string;
+    paid?: boolean;
+    seller?: string;
+    payment?: string;
+    customer?: string | null;
+    date?: string;
+  } = {};
   if (parsed.data.status) updates.status = toDatabaseSaleStatus(parsed.data.status);
   if (parsed.data.paymentStatus) updates.paid = parsed.data.paymentStatus === "pagado";
+  if (parsed.data.seller) updates.seller = parsed.data.seller;
+  if (parsed.data.payment) updates.payment = parsed.data.payment;
+  if (parsed.data.customer !== undefined) updates.customer = parsed.data.customer || null;
+  if (parsed.data.date) updates.date = parsed.data.date;
 
   const { error } = await getSupabaseAdmin()
     .from("movements")
