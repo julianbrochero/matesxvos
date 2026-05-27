@@ -1191,9 +1191,11 @@ function SaleActionMenu({
 function SaleSummary({ sale, products }: { sale: Movement; products: Product[] }) {
   return (
     <div className="min-w-0">
-      <p className="break-words font-semibold text-slate-950">
-        Cliente: {sale.customer ? sale.customer : "-"}
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex max-w-full rounded-md bg-slate-950 px-2.5 py-1 text-xs font-semibold text-white">
+          <span className="truncate">{sale.customer ? sale.customer : "Sin cliente"}</span>
+        </span>
+      </div>
       <p className="mt-0.5 break-words text-sm font-medium text-slate-700">
         Producto: {saleProductLabel(sale, products)}
       </p>
