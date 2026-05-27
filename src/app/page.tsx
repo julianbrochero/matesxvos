@@ -416,6 +416,8 @@ function StockView({ setView }: { setView: (view: View) => void }) {
         </div>
       </Panel>
 
+      <StockLocationReference />
+
       <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
         <table className="w-full border-collapse text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
@@ -430,7 +432,7 @@ function StockView({ setView }: { setView: (view: View) => void }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((product) => (
-              <tr key={product.id} className="hover:bg-slate-50">
+              <tr key={product.id} className={stockLocationRowClass(productLocation(product))}>
                 <td className="px-4 py-3 font-medium">{product.name}</td>
                 <td className="px-4 py-3 text-slate-600">{product.brand}</td>
                 <td className="px-4 py-3 text-slate-600">{productLocation(product)}</td>
@@ -457,7 +459,7 @@ function StockView({ setView }: { setView: (view: View) => void }) {
 
       <div className="grid gap-3 md:hidden">
         {filtered.map((product) => (
-          <article key={product.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <article key={product.id} className={cn("rounded-xl border p-4 shadow-sm", stockLocationCardClass(productLocation(product)))}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="break-words font-medium">{product.name}</p>
@@ -1009,6 +1011,19 @@ function LocationFilterSelect({
   );
 }
 
+function StockLocationReference() {
+  return (
+    <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-slate-600">
+      {LOCATIONS.map((location) => (
+        <div key={location} className="flex items-center gap-2">
+          <span className={cn("h-3 w-6 rounded-full border", stockLocationSwatchClass(location))} />
+          {location}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-slate-50 p-3">
@@ -1016,6 +1031,18 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
   );
+}
+
+function stockLocationRowClass(location: LocationName) {
+  return location === "Villa Maria" ? "bg-amber-50/80 hover:bg-amber-100/80" : "bg-sky-50/80 hover:bg-sky-100/80";
+}
+
+function stockLocationCardClass(location: LocationName) {
+  return location === "Villa Maria" ? "border-amber-200 bg-amber-50/80" : "border-sky-200 bg-sky-50/80";
+}
+
+function stockLocationSwatchClass(location: LocationName) {
+  return location === "Villa Maria" ? "border-amber-300 bg-amber-100" : "border-sky-300 bg-sky-100";
 }
 
 function StockPill({ product }: { product: Product }) {
