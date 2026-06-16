@@ -970,8 +970,121 @@ function WholesaleView() {
   const notify = useAlertStore((state) => state.notify);
   const [generating, setGenerating] = useState(false);
   const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
-  const wholesaleProducts = products.filter((product) => product.stock > 0 && product.wholesalePrice && locationMatches(product, locationFilter));
+  
+  // Tabs: "lista" | "presupuestador"
+  const [activeTab, setActiveTab] = useState<"lista" | "presupuestador">("lista");
+  
+  // Quote Builder States
+  const [clientName, setClientName] = useState("");
+  const [quoteItems, setQuoteItems] = useState<any[]>([]);
+  
+  // Form states for adding items
+  const [selectedProductId, setSelectedProductId] = useState<string>("custom");
+  const [customItemName, setCustomItemName] = useState("");
+  const [addItemQty, setAddItemQty] = useState("1");
+  const [addItemPrice, setAddItemPrice] = useState("");
+
+  const wholesaleProducts = products.filter(
+    (product) => product.stock > 0 && product.wholesalePrice && locationMatches(product, locationFilter)
+  );
   const missingPrice = products.filter((product) => product.stock > 0 && !product.wholesalePrice).length;
+
+  const selectedProduct = products.find((p) => p.id === selectedProductId);
+
+  useEffect(() => {
+    if (selectedProduct) {
+      setAddItemPrice(String(selectedProduct.wholesalePrice ?? selectedProduct.price));
+      setCustomItemName("");
+    } else if (selectedProductId === "custom") {
+      setAddItemPrice("");
+      setCustomItemName("");
+    }
+  }, [selectedProductId, selectedProduct]);
+
+  function handleAddItem(event: FormEvent) {
+    event.preventDefault();
+    const qty = toPositiveInteger(addItemQty);
+
+    if (selectedProductId === "custom") {
+      if (!customItemName.trim()) {
+        notify({ type: "error", title: "Error", message: "Escribí el nombre del ítem personalizado." });
+        return;
+      }
+      const priceVal = toPositiveNumber(addItemPrice);
+      if (priceVal <= 0) {
+        notify({ type: "error", title: "Error", message: "Ingresá un precio válido." });
+        return;
+      }
+      setQuoteItems((current) => [
+        ...current,
+        {
+          id: `custom-${crypto.randomUUID()}`,
+          name: customItemName.trim(),
+          brand: "Personalizado",
+          location: "N/A",
+          quantity: qty,
+          price: priceVal,
+          imageUrl: undefined,
+        },
+      ]);
+      setCustomItemName("");
+      setAddItemQty("1");
+      setAddItemPrice("");
+    } else {
+      if (!selectedProduct) return;
+      const priceVal = toPositiveNumber(addItemPrice);
+      if (priceVal <= 0) {
+        notify({ type: "error", title: "Error", message: "Ingresá un precio válido." });
+        return;
+      }
+
+      const existsIndex = quoteItems.findIndex((item) => item.productId === selectedProduct.id);
+      if (existsIndex > -1) {
+        setQuoteItems((current) => {
+          const updated = [...current];
+          updated[existsIndex].quantity += qty;
+          updated[existsIndex].price = priceVal;
+          return updated;
+        });
+      } else {
+        setQuoteItems((current) => [
+          ...current,
+          {
+            id: selectedProduct.id,
+            productId: selectedProduct.id,
+            name: selectedProduct.name,
+            brand: selectedProduct.brand,
+            location: selectedProduct.location,
+            quantity: qty,
+            price: priceVal,
+            imageUrl: selectedProduct.imageUrl,
+          },
+        ]);
+      }
+      setSelectedProductId("custom");
+      setAddItemQty("1");
+      setAddItemPrice("");
+    }
+    notify({ type: "success", title: "Agregado al presupuesto", message: "El producto se sumó correctamente." });
+  }
+
+  function updateItemQty(itemId: string, newQtyStr: string) {
+    const qty = toPositiveInteger(newQtyStr);
+    setQuoteItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, quantity: qty } : item))
+    );
+  }
+
+  function updateItemPrice(itemId: string, newPriceStr: string) {
+    const price = toPositiveNumber(newPriceStr);
+    setQuoteItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, price: price } : item))
+    );
+  }
+
+  function removeItem(itemId: string) {
+    setQuoteItems((current) => current.filter((item) => item.id !== itemId));
+  }
 
   async function handleDownload() {
     setGenerating(true);
@@ -985,39 +1098,270 @@ function WholesaleView() {
     }
   }
 
+  async function handleDownloadQuote() {
+    if (!quoteItems.length) return;
+    setGenerating(true);
+    try {
+      const formattedItems = quoteItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        brand: item.brand,
+        location: item.location,
+        imageUrl: item.imageUrl,
+        price: item.price,
+        wholesalePrice: item.price,
+        quantity: item.quantity,
+        cost: 0,
+        stock: 9999,
+        minStock: 0,
+        sold: 0,
+      }));
+
+      await downloadPricePdf(formattedItems, "quote", clientName.trim() || "Cliente Mayorista");
+      notify({ type: "success", title: "Presupuesto generado", message: `${quoteItems.length} ítems cargados` });
+    } catch {
+      notify({ type: "error", title: "No pudimos generar el PDF", message: "Revisá las imágenes o intentá de nuevo" });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
-    <section className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
-      <div className="grid gap-5">
-        <PageHeader title="Mayorista" description="Productos con precio mayorista." />
-        <Panel title="PDF mayorista" subtitle={missingPrice ? `${missingPrice} productos sin precio mayorista` : "Lista lista para compartir"}>
-          <div className="mb-3">
-            <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
-          </div>
-          <Button className="w-full" disabled={!wholesaleProducts.length || generating} onClick={() => void handleDownload()}>
-            <Download className="h-4 w-4" />
-            {generating ? "Generando..." : "Descargar PDF"}
-          </Button>
-        </Panel>
+    <section className="grid gap-5">
+      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
+        <PageHeader title="Módulo Mayorista" description="Gestión de catálogo y presupuestador para clientes." />
+        <div className="flex gap-2 rounded-lg bg-slate-100 p-1 self-start sm:self-auto">
+          <button
+            type="button"
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition",
+              activeTab === "lista" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+            )}
+            onClick={() => setActiveTab("lista")}
+          >
+            Lista de Precios
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition",
+              activeTab === "presupuestador" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+            )}
+            onClick={() => setActiveTab("presupuestador")}
+          >
+            Armar Presupuesto
+          </button>
+        </div>
       </div>
 
-      <Panel title="Lista mayorista" subtitle={`${wholesaleProducts.length} productos disponibles`}>
-        <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
-          {wholesaleProducts.map((product) => (
-            <div key={product.id} className="grid gap-3 p-3 sm:grid-cols-[48px_1fr_auto] sm:items-center">
-              <ProductThumb product={product} />
-              <div className="min-w-0">
-                <p className="font-medium">{product.name}</p>
-                <p className="text-sm text-slate-500">{product.brand} - {productLocation(product)} - {product.stock} u.</p>
+      {activeTab === "lista" ? (
+        <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="grid gap-5">
+            <Panel title="PDF mayorista" subtitle={missingPrice ? `${missingPrice} productos sin precio mayorista` : "Lista lista para compartir"}>
+              <div className="mb-3">
+                <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
               </div>
-              <div className="text-left sm:text-right">
-                <p className="font-medium">{currency(product.wholesalePrice ?? product.price)}</p>
-                <p className="text-xs text-slate-500">Minorista {currency(product.price)}</p>
-              </div>
+              <Button className="w-full" disabled={!wholesaleProducts.length || generating} onClick={() => void handleDownload()}>
+                <Download className="h-4 w-4" />
+                {generating ? "Generando..." : "Descargar PDF"}
+              </Button>
+            </Panel>
+          </div>
+
+          <Panel title="Lista mayorista" subtitle={`${wholesaleProducts.length} productos disponibles`}>
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+              {wholesaleProducts.map((product) => (
+                <div key={product.id} className="grid gap-3 p-3 sm:grid-cols-[48px_1fr_auto] sm:items-center">
+                  <ProductThumb product={product} />
+                  <div className="min-w-0">
+                    <p className="font-medium">{product.name}</p>
+                    <p className="text-sm text-slate-500">{product.brand} - {productLocation(product)} - {product.stock} u.</p>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <p className="font-medium">{currency(product.wholesalePrice ?? product.price)}</p>
+                    <p className="text-xs text-slate-500">Minorista {currency(product.price)}</p>
+                  </div>
+                </div>
+              ))}
+              {!wholesaleProducts.length ? <EmptyState title="Sin productos mayoristas" text="Agrega precio mayorista en cada producto." /> : null}
             </div>
-          ))}
-          {!wholesaleProducts.length ? <EmptyState title="Sin productos mayoristas" text="Agrega precio mayorista en cada producto." /> : null}
+          </Panel>
         </div>
-      </Panel>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid gap-5 self-start">
+            <Panel title="Detalles del Cliente" subtitle="Cargá los datos del presupuesto.">
+              <Input
+                label="Cliente / Razón Social"
+                placeholder="Ej. Juan Pérez - Distribuidora Sur"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+              />
+            </Panel>
+
+            <Panel title="Agregar Ítem" subtitle="Sumá un producto o un detalle libre.">
+              <form onSubmit={handleAddItem} className="grid gap-4">
+                <Select
+                  label="Producto"
+                  value={selectedProductId}
+                  onChange={(e) => setSelectedProductId(e.target.value)}
+                >
+                  <option value="custom">— Ítem personalizado —</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.brand}) - Stock: {p.stock}
+                    </option>
+                  ))}
+                </Select>
+
+                {selectedProductId === "custom" && (
+                  <Input
+                    label="Descripción del ítem"
+                    required
+                    placeholder="Ej. Caja 20 kilos de Baldo"
+                    value={customItemName}
+                    onChange={(e) => setCustomItemName(e.target.value)}
+                  />
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label="Cantidad"
+                    type="number"
+                    min="1"
+                    required
+                    value={addItemQty}
+                    onChange={(e) => setAddItemQty(e.target.value)}
+                  />
+                  <Input
+                    label="Precio Unitario"
+                    type="number"
+                    min="1"
+                    required
+                    placeholder="Ej. 100000"
+                    value={addItemPrice}
+                    onChange={(e) => setAddItemPrice(e.target.value)}
+                  />
+                </div>
+
+                <Button type="submit" className="w-full">
+                  <Plus className="h-4 w-4" />
+                  Agregar al Presupuesto
+                </Button>
+              </form>
+            </Panel>
+          </div>
+
+          <Panel
+            title="Presupuesto Actual"
+            subtitle={clientName ? `Para: ${clientName}` : "Agregá ítems para calcular el total"}
+          >
+            <div className="grid gap-4">
+              <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-slate-50/50">
+                {quoteItems.map((item) => (
+                  <div key={item.id} className="grid gap-3 p-3 sm:grid-cols-[48px_1fr_auto_auto] sm:items-center">
+                    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                      {item.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img className="h-full w-full object-cover" src={item.imageUrl} alt={item.name} />
+                      ) : (
+                        <ImageIcon className="h-5 w-5 text-slate-400" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{item.name}</p>
+                      <p className="text-xs text-slate-500">{item.brand} - {item.location}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="grid w-20">
+                        <label className="text-[10px] uppercase text-slate-400 font-semibold mb-0.5">Cant.</label>
+                        <input
+                          type="number"
+                          min="1"
+                          className="h-8 w-full rounded border border-slate-200 bg-white px-1.5 text-sm text-center outline-none focus:border-slate-400"
+                          value={item.quantity}
+                          onChange={(e) => updateItemQty(item.id, e.target.value)}
+                          aria-label={`Cantidad para ${item.name}`}
+                        />
+                      </div>
+                      <div className="grid w-24">
+                        <label className="text-[10px] uppercase text-slate-400 font-semibold mb-0.5">Unitario ($)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          className="h-8 w-full rounded border border-slate-200 bg-white px-1.5 text-sm outline-none focus:border-slate-400"
+                          value={item.price}
+                          onChange={(e) => updateItemPrice(item.id, e.target.value)}
+                          aria-label={`Precio unitario para ${item.name}`}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between sm:justify-end gap-4">
+                      <div className="text-right min-w-[70px]">
+                        <p className="text-[10px] uppercase text-slate-400 font-semibold">Total</p>
+                        <p className="font-semibold text-slate-900">{currency(item.price * item.quantity)}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => removeItem(item.id)}
+                        aria-label={`Eliminar item ${item.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {quoteItems.length === 0 && (
+                  <EmptyState
+                    title="Presupuesto vacío"
+                    text="Cargá ítems usando el formulario de la izquierda."
+                  />
+                )}
+              </div>
+
+              {quoteItems.length > 0 && (
+                <div className="grid gap-4">
+                  <div className="flex items-center justify-between rounded-lg border border-teal-100 bg-teal-50/50 p-4">
+                    <div>
+                      <p className="text-sm text-teal-800 font-medium">Total Presupuestado</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{quoteItems.length} ítems en total</p>
+                    </div>
+                    <p className="text-2xl font-bold text-teal-950">
+                      {currency(quoteItems.reduce((acc, item) => acc + item.price * item.quantity, 0))}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      className="w-1/3"
+                      onClick={() => {
+                        if (confirm("¿Estás seguro de que querés limpiar el presupuesto actual?")) {
+                          setQuoteItems([]);
+                        }
+                      }}
+                    >
+                      Limpiar
+                    </Button>
+                    <Button
+                      className="w-2/3"
+                      disabled={generating}
+                      onClick={() => void handleDownloadQuote()}
+                    >
+                      <Download className="h-4 w-4" />
+                      {generating ? "Generando..." : "Descargar Presupuesto PDF"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Panel>
+        </div>
+      )}
     </section>
   );
 }
@@ -1713,13 +2057,13 @@ function getMetrics(products: Product[], movements: Movement[]) {
   };
 }
 
-type PricePdfMode = "retail" | "wholesale";
+type PricePdfMode = "retail" | "wholesale" | "quote";
 type PdfImage = {
   dataUrl: string;
   format: "JPEG" | "PNG" | "WEBP";
 };
 
-async function downloadPricePdf(products: Product[], mode: PricePdfMode) {
+async function downloadPricePdf(products: (Product & { quantity?: number })[], mode: PricePdfMode, clientName?: string) {
   if (!products.length) return;
 
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
@@ -1727,79 +2071,191 @@ async function downloadPricePdf(products: Product[], mode: PricePdfMode) {
   const pageHeight = doc.internal.pageSize.getHeight();
   const imageMap = await loadProductImages(products);
   const isWholesale = mode === "wholesale";
+  const isQuote = mode === "quote";
 
-  doc.setFillColor(248, 250, 252);
-  doc.rect(0, 0, pageWidth, 112, "F");
-  doc.setTextColor(15, 23, 42);
+  // Top header color accent bar (Teal)
+  doc.setFillColor(13, 148, 136);
+  doc.rect(0, 0, pageWidth, 6, "F");
+
+  // Logo / Business name
+  doc.setTextColor(15, 23, 42); // slate 900
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.text("Mates x Vos", 40, 44);
+  doc.setFontSize(24);
+  doc.text("Mates x Vos", 40, 48);
+
+  // Business Subtitle
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(100, 116, 139);
-  doc.text(`${isWholesale ? "Lista mayorista" : "Lista de precios para clientes"} - ${today()}`, 40, 66);
-  doc.text(`${products.length} productos disponibles`, 40, 84);
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139); // slate 500
+  doc.text("Mates, bombillas y accesorios premium", 40, 62);
+
+  // Business Contact Info (Right side)
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105); // slate 600
+  doc.text("Instagram: @mates.x.vos", pageWidth - 180, 38);
+  doc.text("WhatsApp: +54 9 353 423-1111", pageWidth - 180, 50);
+  doc.text("Ubicación: Bs. As. / Villa María", pageWidth - 180, 62);
+
+  // Thin separator line
+  doc.setDrawColor(226, 232, 240); // slate 200
+  doc.setLineWidth(1);
+  doc.line(40, 76, pageWidth - 40, 76);
+
+  // Title block / Document info
+  doc.setTextColor(15, 23, 42);
+  if (isQuote) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("PRESUPUESTO", 40, 98);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Cliente: ${clientName || "Cliente Mayorista"}`, 40, 113);
+    doc.text(`Fecha: ${today()}`, pageWidth - 180, 98);
+    doc.text("Validez: 15 días corridos", pageWidth - 180, 113);
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(isWholesale ? "CATÁLOGO MAYORISTA" : "LISTA DE PRECIOS", 40, 98);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`${products.length} productos disponibles`, 40, 113);
+    doc.text(`Fecha de emisión: ${today()}`, pageWidth - 180, 98);
+    doc.text("Precios sujetos a variación", pageWidth - 180, 113);
+  }
+
+  const startY = 130;
+  const headers = isQuote
+    ? [["Foto", "Producto", "Cant.", "P. Unitario", "Total"]]
+    : [["Foto", "Producto", "Ubicación", "Precio"]];
+
+  const bodyData = products.map((product) => {
+    if (isQuote) {
+      return [
+        product.id,
+        `${product.name}${product.brand && product.brand !== "Personalizado" ? ` (${product.brand})` : ""}`,
+        String(product.quantity ?? 1),
+        currency(product.wholesalePrice ?? product.price),
+        currency((product.wholesalePrice ?? product.price) * (product.quantity ?? 1)),
+      ];
+    } else {
+      return [
+        product.id,
+        `${product.name}${product.brand ? ` (${product.brand})` : ""}`,
+        productLocation(product),
+        currency(isWholesale ? product.wholesalePrice ?? product.price : product.price),
+      ];
+    }
+  });
 
   autoTable(doc, {
-    startY: 130,
-    head: [["Foto", "Producto", "Ubicacion", isWholesale ? "Mayorista" : "Precio"]],
-    body: products.map((product) => [
-      product.id,
-      product.name,
-      productLocation(product),
-      currency(isWholesale ? product.wholesalePrice ?? product.price : product.price),
-    ]),
+    startY,
+    head: headers,
+    body: bodyData,
     margin: { left: 40, right: 40 },
-    theme: "grid",
+    theme: "striped",
     styles: {
       cellPadding: 8,
       font: "helvetica",
-      fontSize: 9,
-      lineColor: [226, 232, 240],
+      fontSize: 9.5,
+      lineColor: [241, 245, 249],
       lineWidth: 0.5,
-      textColor: [15, 23, 42],
+      textColor: [51, 65, 85], // slate 700
+      valign: "middle",
     },
     headStyles: {
-      fillColor: [15, 23, 42],
+      fillColor: [15, 23, 42], // slate 900
       fontStyle: "bold",
       textColor: [255, 255, 255],
+      fontSize: 10,
     },
-    alternateRowStyles: {
-      fillColor: [248, 250, 252],
-    },
-    columnStyles: {
-      0: { cellWidth: 54, minCellHeight: 46 },
-      3: { halign: "right", fontStyle: "bold" },
-    },
+    columnStyles: isQuote
+      ? {
+          0: { cellWidth: 60, minCellHeight: 52 }, // Foto
+          1: { cellWidth: "auto" }, // Producto
+          2: { cellWidth: 50, halign: "center" }, // Cantidad
+          3: { cellWidth: 90, halign: "right" }, // P. Unitario
+          4: { cellWidth: 90, halign: "right", fontStyle: "bold", textColor: [13, 148, 136] }, // Total
+        }
+      : {
+          0: { cellWidth: 60, minCellHeight: 52 }, // Foto
+          1: { cellWidth: "auto" }, // Producto
+          2: { cellWidth: 100, halign: "center" }, // Ubicacion
+          3: { cellWidth: 100, halign: "right", fontStyle: "bold" }, // Precio
+        },
     didParseCell: (data: any) => {
       if (data.section === "body" && data.column.index === 0) {
         data.cell.text = [""];
-        data.cell.styles.minCellHeight = 46;
       }
     },
     didDrawCell: (data: any) => {
       if (data.section !== "body" || data.column.index !== 0) return;
       const productId = String(data.row.raw[0]);
       const image = imageMap.get(productId);
-      if (!image) return;
 
-      const size = 34;
+      const size = 40;
       const x = data.cell.x + (data.cell.width - size) / 2;
       const y = data.cell.y + (data.cell.height - size) / 2;
-      doc.addImage(image.dataUrl, image.format, x, y, size, size);
+
+      if (image) {
+        // Draw elegant image border box
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(x - 2, y - 2, size + 4, size + 4, "FD");
+        doc.addImage(image.dataUrl, image.format, x, y, size, size);
+      } else {
+        // Draw elegant image placeholder with label
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(x - 2, y - 2, size + 4, size + 4, "FD");
+
+        doc.setTextColor(148, 163, 184); // slate 400
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.text("Foto", data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 + 3, { align: "center" });
+      }
     },
-    didDrawPage: () => {
+    didDrawPage: (data: any) => {
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text(isWholesale ? "Precios mayoristas sujetos a disponibilidad." : "Precios sujetos a disponibilidad.", 40, pageHeight - 32);
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+
+      const text = isQuote
+        ? "Presupuesto válido por 15 días. Sujeto a disponibilidad."
+        : "Precios sujetos a variación sin previo aviso.";
+
+      doc.text(text, 40, pageHeight - 25);
+      doc.text(`Página ${data.pageNumber}`, pageWidth - 70, pageHeight - 25);
     },
   });
 
-  doc.save(`mates-x-vos-${isWholesale ? "mayorista" : "precios"}-${today()}.pdf`);
+  if (isQuote) {
+    const finalY = (doc as any).lastAutoTable.finalY || startY;
+    const total = products.reduce((sum, item) => sum + (item.wholesalePrice ?? item.price) * (item.quantity ?? 1), 0);
+
+    // Draw total block at the bottom right
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(204, 251, 241); // Teal border
+    doc.rect(pageWidth - 220, finalY + 15, 180, 40, "FD");
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("TOTAL PRESUPUESTO:", pageWidth - 210, finalY + 28);
+    doc.setTextColor(13, 148, 136); // Teal text
+    doc.setFontSize(13);
+    doc.text(currency(total), pageWidth - 210, finalY + 45);
+
+    doc.save(`mates-x-vos-presupuesto-${(clientName || "cliente").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${today()}.pdf`);
+  } else {
+    doc.save(`mates-x-vos-${isWholesale ? "mayorista" : "precios"}-${today()}.pdf`);
+  }
 }
 
-async function loadProductImages(products: Product[]) {
+async function loadProductImages(products: (Product & { quantity?: number })[]) {
   const entries = await Promise.all(
     products.map(async (product) => {
       if (!product.imageUrl) return null;
