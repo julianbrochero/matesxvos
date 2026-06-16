@@ -1867,7 +1867,7 @@ function ProductModal({
       imageUrl: form.imageUrl.trim() || undefined,
       cost: toPositiveNumber(form.cost),
       price: toPositiveNumber(form.price),
-      wholesalePrice: toOptionalPositiveNumber(form.wholesalePrice),
+      wholesalePrice: product?.wholesalePrice ?? null,
       stock: toNonNegativeInteger(form.stock),
       minStock: product?.minStock ?? LOW_STOCK_LIMIT,
     });
@@ -1886,7 +1886,6 @@ function ProductModal({
         <div className="grid gap-4 sm:grid-cols-3">
           <Input label="Costo" required type="number" min={1} value={form.cost} onChange={(event) => setForm({ ...form, cost: event.target.value })} />
           <Input label="Precio" required type="number" min={1} value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} />
-          <Input label="Mayorista" type="number" min={1} value={form.wholesalePrice} onChange={(event) => setForm({ ...form, wholesalePrice: event.target.value })} />
           <Input label="Stock" required type="number" min={0} value={form.stock} onChange={(event) => setForm({ ...form, stock: event.target.value })} />
         </div>
         <div className="grid gap-4 sm:grid-cols-[80px_1fr] sm:items-end">
@@ -2092,8 +2091,8 @@ async function downloadPricePdf(products: (Product & { quantity?: number })[], m
   // Business Contact Info (Right side)
   doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105); // slate 600
-  doc.text("Instagram: @mates.x.vos", pageWidth - 180, 38);
-  doc.text("WhatsApp: +54 9 353 423-1111", pageWidth - 180, 50);
+  doc.text("Instagram: @matesxvos", pageWidth - 180, 38);
+  doc.text("WhatsApp: +54 9 353 479-6992", pageWidth - 180, 50);
   doc.text("Ubicación: Bs. As. / Villa María", pageWidth - 180, 62);
 
   // Thin separator line
