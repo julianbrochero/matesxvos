@@ -5,8 +5,10 @@ type ProductRow = {
   name: string;
   brand: string;
   location?: string | null;
+  image_url?: string | null;
   cost: number | string;
   price: number | string;
+  wholesale_price?: number | string | null;
   stock: number;
   min_stock: number;
   sold: number;
@@ -35,8 +37,10 @@ export function mapProduct(row: ProductRow): Product {
     name: row.name,
     brand: row.brand,
     location: row.location || row.brand,
+    imageUrl: row.image_url ?? undefined,
     cost: Number(row.cost),
     price: Number(row.price),
+    wholesalePrice: row.wholesale_price === null || row.wholesale_price === undefined ? null : Number(row.wholesale_price),
     stock: Number(row.stock),
     minStock: Number(row.min_stock),
     sold: Number(row.sold),
@@ -66,8 +70,10 @@ export function toProductRow(product: {
   name: string;
   brand: string;
   location: string;
+  imageUrl?: string | null;
   cost: number;
   price: number;
+  wholesalePrice?: number | null;
   stock: number;
   minStock: number;
 }) {
@@ -75,8 +81,10 @@ export function toProductRow(product: {
     name: product.name,
     brand: product.brand,
     location: product.location,
+    image_url: product.imageUrl?.trim() || null,
     cost: product.cost,
     price: product.price,
+    wholesale_price: product.wholesalePrice && product.wholesalePrice > 0 ? product.wholesalePrice : null,
     stock: product.stock,
     min_stock: product.minStock,
   };

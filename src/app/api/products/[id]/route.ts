@@ -3,15 +3,17 @@ import { z } from "zod";
 import { today } from "@/lib/utils";
 import { requireAdminRequest } from "@/lib/auth";
 import { isSupabaseConfigured, getSupabaseAdmin } from "@/lib/supabase/server";
-import { mapProduct, toProductRow } from "@/lib/supabase/mappers";
+import { mapProduct } from "@/lib/supabase/mappers";
 
 const patchSchema = z
   .object({
     name: z.string().min(1).optional(),
     brand: z.string().min(1).optional(),
     location: z.enum(["Buenos Aires", "Villa Maria"]).optional(),
+    imageUrl: z.string().trim().max(200000).nullable().optional(),
     cost: z.coerce.number().positive().optional(),
     price: z.coerce.number().positive().optional(),
+    wholesalePrice: z.coerce.number().positive().nullable().optional(),
     stock: z.coerce.number().int().nonnegative().optional(),
     minStock: z.coerce.number().int().nonnegative().optional(),
   })
@@ -36,22 +38,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const supabase = getSupabaseAdmin();
-  const payload = toProductRow({
-    name: parsed.data.name ?? "",
-    brand: parsed.data.brand ?? "",
-    location: parsed.data.location ?? "",
-    cost: parsed.data.cost ?? 1,
-    price: parsed.data.price ?? 1,
-    stock: parsed.data.stock ?? 0,
-    minStock: parsed.data.minStock ?? 0,
-  });
-
-  const partialPayload = Object.fromEntries(
-    Object.entries(payload).filter(([key]) => {
-      if (key === "min_stock") return parsed.data.minStock !== undefined;
-      return parsed.data[key as keyof typeof parsed.data] !== undefined;
-    }),
-  );
+  const partialPayload: Record<string, string | number | null> = {};
+  if (parsed.data.name !== undefined) partialPayload.name = parsed.data.name;
+  if (parsed.data.brand !== undefined) partialPayload.brand = parsed.data.brand;
+  if (parsed.data.location !== undefined) partialPayload.location = parsed.data.location;
+  if (parsed.data.imageUrl !== undefined) partialPayload.image_url = parsed.data.imageUrl?.trim() || null;
+  if (parsed.data.cost !== undefined) partialPayload.cost = parsed.data.cost;
+  if (parsed.data.price !== undefined) partialPayload.price = parsed.data.price;
+  if (parsed.data.wholesalePrice !== undefined) partialPayload.wholesale_price = parsed.data.wholesalePrice;
+  if (parsed.data.stock !== undefined) partialPayload.stock = parsed.data.stock;
+  if (parsed.data.minStock !== undefined) partialPayload.min_stock = parsed.data.minStock;
 
   const { data, error } = await supabase
     .from("products")

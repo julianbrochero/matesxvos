@@ -5,8 +5,10 @@ create table if not exists public.products (
   name text not null,
   brand text not null,
   location text not null default 'Buenos Aires',
+  image_url text,
   cost numeric(12, 2) not null check (cost > 0),
   price numeric(12, 2) not null check (price > 0),
+  wholesale_price numeric(12, 2),
   stock integer not null default 0 check (stock >= 0),
   min_stock integer not null default 0 check (min_stock >= 0),
   sold integer not null default 0 check (sold >= 0),
@@ -19,6 +21,12 @@ add column if not exists location text not null default 'Buenos Aires';
 
 alter table public.products
 alter column location set default 'Buenos Aires';
+
+alter table public.products
+add column if not exists image_url text;
+
+alter table public.products
+add column if not exists wholesale_price numeric(12, 2);
 
 update public.products
 set location = case
@@ -43,6 +51,21 @@ begin
     alter table public.products
     add constraint products_location_valid
     check (location in ('Buenos Aires', 'Villa Maria'));
+  end if;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'products_wholesale_price_positive'
+      and conrelid = 'public.products'::regclass
+  ) then
+    alter table public.products
+    add constraint products_wholesale_price_positive
+    check (wholesale_price is null or wholesale_price > 0);
   end if;
 end;
 $$;
@@ -239,17 +262,17 @@ begin
 end;
 $$;
 
-insert into public.products (name, brand, location, cost, price, stock, min_stock, sold)
+insert into public.products (name, brand, location, cost, price, wholesale_price, stock, min_stock, sold)
 select *
 from (
   values
-    ('Baldo 1kg', 'Baldo', 'Buenos Aires', 12000, 17000, 34, 8, 42),
-    ('Canarias Serena 1kg', 'Canarias', 'Villa Maria', 10800, 15800, 18, 10, 31),
-    ('Playadito 1kg', 'Playadito', 'Buenos Aires', 7200, 11200, 46, 12, 55),
-    ('La Merced Campo 500g', 'La Merced', 'Villa Maria', 5400, 8200, 12, 8, 18),
-    ('Sara Tradicional 1kg', 'Sara', 'Buenos Aires', 9800, 14500, 7, 9, 22),
-    ('Rei Verde Export 1kg', 'Rei Verde', 'Villa Maria', 11500, 16900, 15, 6, 15)
-) as seed(name, brand, location, cost, price, stock, min_stock, sold)
+    ('Baldo 1kg', 'Baldo', 'Buenos Aires', 12000, 17000, 15500, 34, 8, 42),
+    ('Canarias Serena 1kg', 'Canarias', 'Villa Maria', 10800, 15800, 14500, 18, 10, 31),
+    ('Playadito 1kg', 'Playadito', 'Buenos Aires', 7200, 11200, 10100, 46, 12, 55),
+    ('La Merced Campo 500g', 'La Merced', 'Villa Maria', 5400, 8200, 7500, 12, 8, 18),
+    ('Sara Tradicional 1kg', 'Sara', 'Buenos Aires', 9800, 14500, 13200, 7, 9, 22),
+    ('Rei Verde Export 1kg', 'Rei Verde', 'Villa Maria', 11500, 16900, 15400, 15, 6, 15)
+) as seed(name, brand, location, cost, price, wholesale_price, stock, min_stock, sold)
 where not exists (select 1 from public.products);
 
 insert into public.movements (type, status, title, detail, amount, profit, date, seller, payment, paid)

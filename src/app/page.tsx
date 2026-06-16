@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Download,
   Edit3,
+  Image as ImageIcon,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -18,6 +19,7 @@ import {
   Search,
   ShoppingBag,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,7 +31,7 @@ import { type AlertType, useAlertStore } from "@/lib/alerts";
 import { cn, currency, today } from "@/lib/utils";
 import { Movement, Product, type SaleUpdateInput, useStockStore } from "@/lib/store";
 
-type View = "dashboard" | "stock" | "carga" | "ventas" | "precios";
+type View = "dashboard" | "stock" | "carga" | "ventas" | "precios" | "mayorista";
 type LocationName = "Buenos Aires" | "Villa Maria";
 type LocationFilter = "todos" | LocationName;
 type SaleStatus = "entregado" | "encargado";
@@ -57,6 +59,7 @@ const navItems: { id: View; label: string; short: string; icon: typeof Boxes }[]
   { id: "stock", label: "Stock", short: "Stock", icon: Boxes },
   { id: "carga", label: "Carga", short: "Carga", icon: PackagePlus },
   { id: "precios", label: "Precios", short: "PDF", icon: Download },
+  { id: "mayorista", label: "Mayorista", short: "Mayor", icon: Users },
 ];
 
 export default function Home() {
@@ -117,6 +120,7 @@ export default function Home() {
           {view === "ventas" && <SalesView />}
           {view === "carga" && <PurchasesView />}
           {view === "precios" && <PricesView />}
+          {view === "mayorista" && <WholesaleView />}
         </AppShell>
       </main>
     </>
@@ -422,17 +426,20 @@ function StockView({ setView }: { setView: (view: View) => void }) {
         <table className="w-full border-collapse text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
+              <th className="px-4 py-3">Foto</th>
               <th className="px-4 py-3">Producto</th>
               <th className="px-4 py-3">Proveedor</th>
               <th className="px-4 py-3">Ubicacion</th>
               <th className="px-4 py-3">Stock</th>
               <th className="px-4 py-3">Precio</th>
+              <th className="px-4 py-3">Mayorista</th>
               <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((product) => (
               <tr key={product.id} className={stockLocationRowClass(productLocation(product))}>
+                <td className="px-4 py-3"><ProductThumb product={product} /></td>
                 <td className="px-4 py-3 font-medium">{product.name}</td>
                 <td className="px-4 py-3 text-slate-600">{product.brand}</td>
                 <td className="px-4 py-3 text-slate-600">{productLocation(product)}</td>
@@ -440,6 +447,7 @@ function StockView({ setView }: { setView: (view: View) => void }) {
                   <StockEditor product={product} onSave={(stock) => void saveStock(product, stock, updateStock, notify)} />
                 </td>
                 <td className="px-4 py-3 font-medium">{currency(product.price)}</td>
+                <td className="px-4 py-3 font-medium">{product.wholesalePrice ? currency(product.wholesalePrice) : "-"}</td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
                     <Button variant="secondary" size="icon" onClick={() => { setEditing(product); setModalOpen(true); }} aria-label="Editar producto">
@@ -461,15 +469,19 @@ function StockView({ setView }: { setView: (view: View) => void }) {
         {filtered.map((product) => (
           <article key={product.id} className={cn("rounded-xl border p-4 shadow-sm", stockLocationCardClass(productLocation(product)))}>
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="break-words font-medium">{product.name}</p>
-                <p className="mt-1 text-sm text-slate-500">{product.brand} - {productLocation(product)}</p>
+              <div className="flex min-w-0 gap-3">
+                <ProductThumb product={product} />
+                <div className="min-w-0">
+                  <p className="break-words font-medium">{product.name}</p>
+                  <p className="mt-1 text-sm text-slate-500">{product.brand} - {productLocation(product)}</p>
+                </div>
               </div>
               <StockPill product={product} />
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
               <Info label="Costo" value={currency(product.cost)} />
               <Info label="Precio" value={currency(product.price)} />
+              <Info label="Mayorista" value={product.wholesalePrice ? currency(product.wholesalePrice) : "-"} />
             </div>
             <div className="mt-4 grid grid-cols-[1fr_auto_auto] gap-2">
               <StockEditor product={product} onSave={(stock) => void saveStock(product, stock, updateStock, notify)} />
@@ -910,7 +922,7 @@ function PricesView() {
   async function handleDownload() {
     setGenerating(true);
     try {
-      await downloadPricePdf(availableProducts);
+      await downloadPricePdf(availableProducts, "retail");
       notify({ type: "success", title: "PDF generado", message: `${availableProducts.length} productos` });
     } catch {
       notify({ type: "error", title: "No pudimos generar el PDF", message: "Intentá de nuevo en unos segundos" });
@@ -937,8 +949,9 @@ function PricesView() {
       <Panel title="Vista previa" subtitle={`${availableProducts.length} productos disponibles`}>
         <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
           {availableProducts.map((product) => (
-            <div key={product.id} className="grid gap-1 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
-              <div>
+            <div key={product.id} className="grid gap-3 p-3 sm:grid-cols-[48px_1fr_auto] sm:items-center">
+              <ProductThumb product={product} />
+              <div className="min-w-0">
                 <p className="font-medium">{product.name}</p>
                 <p className="text-sm text-slate-500">{product.brand} - {productLocation(product)}</p>
               </div>
@@ -946,6 +959,63 @@ function PricesView() {
             </div>
           ))}
           {!availableProducts.length ? <EmptyState title="Sin productos" text="Carga stock para crear la lista." /> : null}
+        </div>
+      </Panel>
+    </section>
+  );
+}
+
+function WholesaleView() {
+  const products = useStockStore((state) => state.products);
+  const notify = useAlertStore((state) => state.notify);
+  const [generating, setGenerating] = useState(false);
+  const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
+  const wholesaleProducts = products.filter((product) => product.stock > 0 && product.wholesalePrice && locationMatches(product, locationFilter));
+  const missingPrice = products.filter((product) => product.stock > 0 && !product.wholesalePrice).length;
+
+  async function handleDownload() {
+    setGenerating(true);
+    try {
+      await downloadPricePdf(wholesaleProducts, "wholesale");
+      notify({ type: "success", title: "PDF mayorista generado", message: `${wholesaleProducts.length} productos` });
+    } catch {
+      notify({ type: "error", title: "No pudimos generar el PDF", message: "Revisá las imágenes o intentá de nuevo" });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <section className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+      <div className="grid gap-5">
+        <PageHeader title="Mayorista" description="Productos con precio mayorista." />
+        <Panel title="PDF mayorista" subtitle={missingPrice ? `${missingPrice} productos sin precio mayorista` : "Lista lista para compartir"}>
+          <div className="mb-3">
+            <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
+          </div>
+          <Button className="w-full" disabled={!wholesaleProducts.length || generating} onClick={() => void handleDownload()}>
+            <Download className="h-4 w-4" />
+            {generating ? "Generando..." : "Descargar PDF"}
+          </Button>
+        </Panel>
+      </div>
+
+      <Panel title="Lista mayorista" subtitle={`${wholesaleProducts.length} productos disponibles`}>
+        <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+          {wholesaleProducts.map((product) => (
+            <div key={product.id} className="grid gap-3 p-3 sm:grid-cols-[48px_1fr_auto] sm:items-center">
+              <ProductThumb product={product} />
+              <div className="min-w-0">
+                <p className="font-medium">{product.name}</p>
+                <p className="text-sm text-slate-500">{product.brand} - {productLocation(product)} - {product.stock} u.</p>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="font-medium">{currency(product.wholesalePrice ?? product.price)}</p>
+                <p className="text-xs text-slate-500">Minorista {currency(product.price)}</p>
+              </div>
+            </div>
+          ))}
+          {!wholesaleProducts.length ? <EmptyState title="Sin productos mayoristas" text="Agrega precio mayorista en cada producto." /> : null}
         </div>
       </Panel>
     </section>
@@ -1040,6 +1110,19 @@ function Info({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg bg-slate-50 p-3">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
+    </div>
+  );
+}
+
+function ProductThumb({ product }: { product: Product }) {
+  return (
+    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+      {product.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="h-full w-full object-cover" src={product.imageUrl} alt={product.name} />
+      ) : (
+        <ImageIcon className="h-5 w-5 text-slate-400" />
+      )}
     </div>
   );
 }
@@ -1389,18 +1472,47 @@ function ProductModal({
   onClose: () => void;
   onSubmit: (values: Omit<Product, "id" | "sold">) => void | Promise<void>;
 }) {
-  const [form, setForm] = useState({ name: "", brand: "", location: "", cost: "", price: "", stock: "" });
+  const [form, setForm] = useState({
+    name: "",
+    brand: "",
+    location: "",
+    imageUrl: "",
+    cost: "",
+    price: "",
+    wholesalePrice: "",
+    stock: "",
+  });
+  const [imageError, setImageError] = useState("");
 
   useEffect(() => {
     setForm({
       name: product?.name ?? "",
       brand: product?.brand ?? "",
       location: normalizeLocation(product?.location),
+      imageUrl: product?.imageUrl ?? "",
       cost: product ? String(product.cost) : "",
       price: product ? String(product.price) : "",
+      wholesalePrice: product?.wholesalePrice ? String(product.wholesalePrice) : "",
       stock: product ? String(product.stock) : "",
     });
+    setImageError("");
   }, [product, open]);
+
+  async function handleImageFile(file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setImageError("Elegí un archivo de imagen.");
+      return;
+    }
+    if (file.size > 150000) {
+      setImageError("La imagen debe pesar menos de 150 KB.");
+      return;
+    }
+
+    const imageUrl = await readFileAsDataUrl(file);
+    setForm((current) => ({ ...current, imageUrl }));
+    setImageError("");
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -1408,8 +1520,10 @@ function ProductModal({
       name: form.name.trim(),
       brand: form.brand.trim(),
       location: normalizeLocation(form.location),
+      imageUrl: form.imageUrl.trim() || undefined,
       cost: toPositiveNumber(form.cost),
       price: toPositiveNumber(form.price),
+      wholesalePrice: toOptionalPositiveNumber(form.wholesalePrice),
       stock: toNonNegativeInteger(form.stock),
       minStock: product?.minStock ?? LOW_STOCK_LIMIT,
     });
@@ -1428,7 +1542,28 @@ function ProductModal({
         <div className="grid gap-4 sm:grid-cols-3">
           <Input label="Costo" required type="number" min={1} value={form.cost} onChange={(event) => setForm({ ...form, cost: event.target.value })} />
           <Input label="Precio" required type="number" min={1} value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} />
+          <Input label="Mayorista" type="number" min={1} value={form.wholesalePrice} onChange={(event) => setForm({ ...form, wholesalePrice: event.target.value })} />
           <Input label="Stock" required type="number" min={0} value={form.stock} onChange={(event) => setForm({ ...form, stock: event.target.value })} />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-[80px_1fr] sm:items-end">
+          <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+            {form.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="h-full w-full object-cover" src={form.imageUrl} alt="Vista previa" />
+            ) : (
+              <ImageIcon className="h-6 w-6 text-slate-400" />
+            )}
+          </div>
+          <div className="grid gap-3">
+            <Input label="Imagen URL" value={form.imageUrl} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} placeholder="https://..." />
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
+              <Input label="Subir imagen" type="file" accept="image/*" onChange={(event) => void handleImageFile(event.target.files?.[0])} />
+              <Button type="button" variant="secondary" onClick={() => setForm({ ...form, imageUrl: "" })}>
+                Limpiar
+              </Button>
+            </div>
+            {imageError ? <p className="text-sm text-red-600">{imageError}</p> : null}
+          </div>
         </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
@@ -1553,6 +1688,11 @@ function toPositiveNumber(value: string) {
   return Number.isFinite(number) && number > 0 ? number : 0;
 }
 
+function toOptionalPositiveNumber(value: string) {
+  const number = Number(value);
+  return value.trim() && Number.isFinite(number) && number > 0 ? number : null;
+}
+
 function handleFormKeyboardNavigation(event: KeyboardEvent<HTMLFormElement>) {
   if (event.key !== "Enter") return;
   const target = event.target as HTMLElement;
@@ -1573,12 +1713,20 @@ function getMetrics(products: Product[], movements: Movement[]) {
   };
 }
 
-async function downloadPricePdf(products: Product[]) {
+type PricePdfMode = "retail" | "wholesale";
+type PdfImage = {
+  dataUrl: string;
+  format: "JPEG" | "PNG" | "WEBP";
+};
+
+async function downloadPricePdf(products: Product[], mode: PricePdfMode) {
   if (!products.length) return;
 
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
+  const imageMap = await loadProductImages(products);
+  const isWholesale = mode === "wholesale";
 
   doc.setFillColor(248, 250, 252);
   doc.rect(0, 0, pageWidth, 112, "F");
@@ -1589,16 +1737,17 @@ async function downloadPricePdf(products: Product[]) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(100, 116, 139);
-  doc.text(`Lista de precios para clientes - ${today()}`, 40, 66);
+  doc.text(`${isWholesale ? "Lista mayorista" : "Lista de precios para clientes"} - ${today()}`, 40, 66);
   doc.text(`${products.length} productos disponibles`, 40, 84);
 
   autoTable(doc, {
     startY: 130,
-    head: [["Producto", "Ubicacion", "Precio"]],
+    head: [["Foto", "Producto", "Ubicacion", isWholesale ? "Mayorista" : "Precio"]],
     body: products.map((product) => [
+      product.id,
       product.name,
       productLocation(product),
-      currency(product.price),
+      currency(isWholesale ? product.wholesalePrice ?? product.price : product.price),
     ]),
     margin: { left: 40, right: 40 },
     theme: "grid",
@@ -1619,15 +1768,77 @@ async function downloadPricePdf(products: Product[]) {
       fillColor: [248, 250, 252],
     },
     columnStyles: {
-      2: { halign: "right", fontStyle: "bold" },
+      0: { cellWidth: 54, minCellHeight: 46 },
+      3: { halign: "right", fontStyle: "bold" },
+    },
+    didParseCell: (data: any) => {
+      if (data.section === "body" && data.column.index === 0) {
+        data.cell.text = [""];
+        data.cell.styles.minCellHeight = 46;
+      }
+    },
+    didDrawCell: (data: any) => {
+      if (data.section !== "body" || data.column.index !== 0) return;
+      const productId = String(data.row.raw[0]);
+      const image = imageMap.get(productId);
+      if (!image) return;
+
+      const size = 34;
+      const x = data.cell.x + (data.cell.width - size) / 2;
+      const y = data.cell.y + (data.cell.height - size) / 2;
+      doc.addImage(image.dataUrl, image.format, x, y, size, size);
     },
     didDrawPage: () => {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(100, 116, 139);
-      doc.text("Precios sujetos a disponibilidad.", 40, pageHeight - 32);
+      doc.text(isWholesale ? "Precios mayoristas sujetos a disponibilidad." : "Precios sujetos a disponibilidad.", 40, pageHeight - 32);
     },
   });
 
-  doc.save(`mates-x-vos-precios-${today()}.pdf`);
+  doc.save(`mates-x-vos-${isWholesale ? "mayorista" : "precios"}-${today()}.pdf`);
+}
+
+async function loadProductImages(products: Product[]) {
+  const entries = await Promise.all(
+    products.map(async (product) => {
+      if (!product.imageUrl) return null;
+      const image = await imageToPdfData(product.imageUrl).catch(() => null);
+      return image ? ([product.id, image] as const) : null;
+    }),
+  );
+
+  return new Map(entries.filter((entry): entry is readonly [string, PdfImage] => Boolean(entry)));
+}
+
+async function imageToPdfData(source: string): Promise<PdfImage> {
+  const dataUrl = source.startsWith("data:image/")
+    ? source
+    : await fetchImageAsDataUrl(source);
+  return {
+    dataUrl,
+    format: imageFormatFromDataUrl(dataUrl),
+  };
+}
+
+async function fetchImageAsDataUrl(source: string) {
+  const response = await fetch(source);
+  if (!response.ok) throw new Error("No se pudo cargar la imagen");
+  const blob = await response.blob();
+  return readFileAsDataUrl(blob);
+}
+
+function imageFormatFromDataUrl(dataUrl: string): PdfImage["format"] {
+  if (dataUrl.startsWith("data:image/png")) return "PNG";
+  if (dataUrl.startsWith("data:image/webp")) return "WEBP";
+  return "JPEG";
+}
+
+function readFileAsDataUrl(file: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("No se pudo leer la imagen"));
+    reader.readAsDataURL(file);
+  });
 }

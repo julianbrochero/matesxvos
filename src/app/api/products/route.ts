@@ -9,8 +9,10 @@ const productSchema = z.object({
   name: z.string().min(1),
   brand: z.string().min(1),
   location: z.enum(["Buenos Aires", "Villa Maria"]),
+  imageUrl: z.string().trim().max(200000).nullable().optional(),
   cost: z.coerce.number().positive(),
   price: z.coerce.number().positive(),
+  wholesalePrice: z.coerce.number().positive().nullable().optional(),
   stock: z.coerce.number().int().nonnegative(),
   minStock: z.coerce.number().int().nonnegative(),
 });
