@@ -2135,7 +2135,7 @@ async function downloadPricePdf(products: (Product & { quantity?: number })[], m
     if (isQuote) {
       return [
         product.id,
-        `${product.name}${product.brand && product.brand !== "Personalizado" ? ` (${product.brand})` : ""}`,
+        product.name,
         String(product.quantity ?? 1),
         currency(product.wholesalePrice ?? product.price),
         currency((product.wholesalePrice ?? product.price) * (product.quantity ?? 1)),
@@ -2143,7 +2143,7 @@ async function downloadPricePdf(products: (Product & { quantity?: number })[], m
     } else {
       return [
         product.id,
-        `${product.name}${product.brand ? ` (${product.brand})` : ""}`,
+        product.name,
         productLocation(product),
         currency(isWholesale ? product.wholesalePrice ?? product.price : product.price),
       ];
