@@ -38,11 +38,17 @@ type SaleStatus = "entregado" | "encargado";
 type SaleFilter = "todos" | SaleStatus;
 type SalePaymentStatus = "pagado" | "no_pagado";
 type SalePaymentFilter = "todos" | SalePaymentStatus;
+type SaleLineItem = {
+  id: string;
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+};
 type Notify = (alert: { type: AlertType; title: string; message?: string; persistent?: boolean }) => void;
 
 const LOW_STOCK_LIMIT = 5;
 const LOCATIONS: LocationName[] = ["Buenos Aires", "Villa Maria"];
-const VENDORS = ["Julian", "Santiago"] as const;
+const VENDORS = ["Julian", "Santiago", "Agustina"] as const;
 const PAYMENT_METHODS = ["Mercado Pago", "Efectivo", "Transferencia", "Tarjeta", "A definir"] as const;
 const SALE_STATUSES: { id: SaleStatus; label: string }[] = [
   { id: "entregado", label: "Entregado" },
@@ -545,6 +551,7 @@ function SalesView() {
   const [status, setStatus] = useState<SaleStatus>("entregado");
   const [paymentStatus, setPaymentStatus] = useState<SalePaymentStatus>("pagado");
   const [date, setDate] = useState(today());
+  const [cart, setCart] = useState<SaleLineItem[]>([]);
   const selected = products.find((product) => product.id === productId);
   const selectedId = selected?.id;
   const selectedPrice = selected?.price;
@@ -555,7 +562,13 @@ function SalesView() {
   const quantityValue = toPositiveInteger(quantity);
   const unitPriceValue = toPositiveNumber(salePrice);
   const effectiveUnitPrice = unitPriceValue > 0 ? unitPriceValue : selected?.price ?? 0;
-  const total = effectiveUnitPrice * quantityValue;
+  const lineTotal = effectiveUnitPrice * quantityValue;
+  const cartTotal = cart.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const cartProfit = cart.reduce((sum, item) => {
+    const product = products.find((entry) => entry.id === item.productId);
+    if (!product) return sum;
+    return sum + (item.unitPrice - product.cost) * item.quantity;
+  }, 0);
   const sales = movements.filter((movement) => movement.type === "venta");
   const visibleSales = sales.filter((sale) => {
     const statusOk = statusFilter === "todos" || saleStatus(sale) === statusFilter;
@@ -573,35 +586,97 @@ function SalesView() {
     setSalePrice(selectedPrice ? String(selectedPrice) : "");
   }, [selectedId, selectedPrice]);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  function resetSaleForm() {
+    setCart([]);
+    setQuantity("1");
+    setSalePrice(selectedPrice ? String(selectedPrice) : "");
+    setCustomer("");
+    setStatus("entregado");
+    setPaymentStatus("pagado");
+  }
+
+  function addLineToCart() {
+    if (!selected) return;
     if (unitPriceValue <= 0) {
       notify({ type: "warning", title: "Ingresá un precio de venta válido" });
       return;
     }
+    if (quantityValue <= 0) {
+      notify({ type: "warning", title: "Ingresá una cantidad válida" });
+      return;
+    }
 
-    const ok = await registerSale({
-      productId,
-      quantity: quantityValue,
-      unitPrice: unitPriceValue,
+    setCart((items) => [
+      ...items,
+      {
+        id: crypto.randomUUID(),
+        productId,
+        quantity: quantityValue,
+        unitPrice: unitPriceValue,
+      },
+    ]);
+    setQuantity("1");
+  }
+
+  function removeLineFromCart(lineId: string) {
+    setCart((items) => items.filter((item) => item.id !== lineId));
+  }
+
+  function updateCartLineUnitPrice(lineId: string, value: string) {
+    const unitPrice = toPositiveNumber(value);
+    if (unitPrice <= 0) return;
+    setCart((items) => items.map((item) => (item.id === lineId ? { ...item, unitPrice } : item)));
+  }
+
+  function updateCartLineTotal(lineId: string, value: string) {
+    const lineTotal = toPositiveNumber(value);
+    if (lineTotal <= 0) return;
+    setCart((items) =>
+      items.map((item) => (item.id === lineId ? { ...item, unitPrice: lineTotal / item.quantity } : item)),
+    );
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!cart.length) {
+      notify({ type: "warning", title: "Agregá al menos un producto a la venta" });
+      return;
+    }
+
+    const saleMeta = {
       seller,
       payment,
       customer: customer.trim() || undefined,
       date,
       status,
       paymentStatus,
-    });
-    if (!ok) {
-      notify({ type: "warning", title: "No hay stock suficiente", message: selected?.name });
-      return;
+    };
+
+    for (const item of cart) {
+      const product = products.find((entry) => entry.id === item.productId);
+      const ok = await registerSale({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        ...saleMeta,
+      });
+      if (!ok) {
+        notify({ type: "warning", title: "No hay stock suficiente", message: product?.name });
+        return;
+      }
     }
-    notify({ type: "success", title: status === "encargado" ? "Encargo registrado" : "Venta registrada", message: selected?.name });
+
+    const productNames = cart
+      .map((item) => products.find((entry) => entry.id === item.productId)?.name)
+      .filter(Boolean)
+      .join(", ");
+    notify({
+      type: "success",
+      title: status === "encargado" ? "Encargo registrado" : "Venta registrada",
+      message: productNames,
+    });
     setModalOpen(false);
-    setQuantity("1");
-    setSalePrice(selectedPrice ? String(selectedPrice) : "");
-    setCustomer("");
-    setStatus("entregado");
-    setPaymentStatus("pagado");
+    resetSaleForm();
   }
 
   async function changeSaleStatus(sale: Movement, nextStatus: SaleStatus) {
@@ -714,7 +789,10 @@ function SalesView() {
                 <td className="px-4 py-3">
                   <SaleStatusSelect value={saleStatus(sale)} onChange={(nextStatus) => void changeSaleStatus(sale, nextStatus)} />
                 </td>
-                <td className="px-4 py-3 text-right font-medium">{currency(sale.amount)}</td>
+                <td className="px-4 py-3 text-right">
+                  <p className="font-medium">{currency(sale.amount)}</p>
+                  <p className="mt-0.5 text-xs font-semibold text-emerald-700">+{currency(sale.profit)}</p>
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end">
                     <SaleActionMenu
@@ -761,7 +839,15 @@ function SalesView() {
         Venta
       </Button>
 
-      <Modal open={modalOpen} title="Agregar venta" subtitle="Formulario rapido" onClose={() => setModalOpen(false)}>
+      <Modal
+        open={modalOpen}
+        title="Agregar venta"
+        subtitle="Formulario rapido"
+        onClose={() => {
+          setModalOpen(false);
+          resetSaleForm();
+        }}
+      >
         <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
           <Select label="Ubicacion" value={saleLocation} onChange={(event) => setSaleLocation(event.target.value as LocationName)}>
             {LOCATIONS.map((location) => <option key={location} value={location}>{location}</option>)}
@@ -774,6 +860,71 @@ function SalesView() {
             <Input label="Precio venta" required type="number" min={1} step="0.01" value={salePrice} onChange={(event) => setSalePrice(event.target.value)} />
             <Input label="Fecha" required type="date" value={date} onChange={(event) => setDate(event.target.value)} />
           </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Disponible</span>
+              <span className="font-medium">{selected?.stock ?? 0} u.</span>
+            </div>
+            <div className="mt-1 flex justify-between gap-3">
+              <span className="text-slate-500">Precio lista</span>
+              <span className="font-medium">{currency(selected?.price ?? 0)}</span>
+            </div>
+            <div className="mt-1 flex justify-between gap-3">
+              <span className="text-slate-500">Subtotal</span>
+              <span className="font-medium">{currency(lineTotal)}</span>
+            </div>
+          </div>
+          <Button type="button" variant="secondary" onClick={addLineToCart} disabled={!saleProducts.length}>
+            <Plus className="h-4 w-4" />
+            Agregar producto
+          </Button>
+          {cart.length ? (
+            <div className="grid gap-2 rounded-lg border border-slate-200 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Productos en la venta</p>
+              {cart.map((item) => {
+                const product = products.find((entry) => entry.id === item.productId);
+                const lineTotal = item.quantity * item.unitPrice;
+                const lineProfit = product ? (item.unitPrice - product.cost) * item.quantity : 0;
+                return (
+                  <div key={item.id} className="grid gap-2 rounded-md border border-slate-100 bg-slate-50 p-3 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{product?.name ?? "Producto"}</p>
+                        <p className="text-slate-500">{item.quantity} u.</p>
+                      </div>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeLineFromCart(item.id)} aria-label="Quitar producto">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        label="Precio unitario"
+                        type="number"
+                        min={1}
+                        step="0.01"
+                        value={String(Math.round(item.unitPrice))}
+                        onChange={(event) => updateCartLineUnitPrice(item.id, event.target.value)}
+                      />
+                      <Input
+                        label="Precio final"
+                        type="number"
+                        min={1}
+                        step="0.01"
+                        value={String(Math.round(lineTotal))}
+                        onChange={(event) => updateCartLineTotal(item.id, event.target.value)}
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="text-slate-500">Subtotal {currency(lineTotal)}</span>
+                      <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">
+                        Ganancia {currency(lineProfit)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-3">
             <Select
               label="Estado"
@@ -806,19 +957,15 @@ function SalesView() {
           />
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
             <div className="flex justify-between gap-3">
-              <span className="text-slate-500">Disponible</span>
-              <span className="font-medium">{selected?.stock ?? 0} u.</span>
+              <span className="text-slate-500">Total venta</span>
+              <span className="font-medium">{currency(cartTotal)}</span>
             </div>
-            <div className="mt-1 flex justify-between gap-3">
-              <span className="text-slate-500">Precio lista</span>
-              <span className="font-medium">{currency(selected?.price ?? 0)}</span>
-            </div>
-            <div className="mt-1 flex justify-between gap-3">
-              <span className="text-slate-500">Total</span>
-              <span className="font-medium">{currency(total)}</span>
+            <div className="mt-2 flex justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+              <span className="font-medium text-emerald-800">Ganancia estimada</span>
+              <span className="font-semibold text-emerald-700">{currency(cartProfit)}</span>
             </div>
           </div>
-          <Button disabled={!saleProducts.length}>
+          <Button disabled={!cart.length}>
             <ShoppingBag className="h-4 w-4" />
             Guardar venta
           </Button>
@@ -827,6 +974,7 @@ function SalesView() {
 
       <SaleEditModal
         sale={editingSale}
+        products={products}
         onClose={() => setEditingSale(null)}
         onSubmit={(input) => {
           if (editingSale) void saveSaleEdit(editingSale, input);
@@ -1567,7 +1715,10 @@ function SaleCard({
           <p className="mt-1 text-sm text-slate-500">{sale.date} - {sale.seller ?? "Sin vendedor"} - {location}</p>
         </div>
         <div className="grid justify-items-end gap-2">
-          <p className="shrink-0 font-semibold">{currency(sale.amount)}</p>
+          <div className="text-right">
+            <p className="shrink-0 font-semibold">{currency(sale.amount)}</p>
+            <p className="text-xs font-semibold text-emerald-700">Ganancia {currency(sale.profit)}</p>
+          </div>
           <SaleActionMenu open={actionMenuOpen} onToggle={onActionMenuToggle} onEdit={onEdit} onDelete={onDelete} />
         </div>
       </div>
@@ -1620,27 +1771,37 @@ function SaleActionMenu({
 }
 
 function SaleSummary({ sale, products }: { sale: Movement; products: Product[] }) {
+  const unitPrice = saleUnitPrice(sale);
+
   return (
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex max-w-full rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
           <span className="truncate">{sale.customer ? sale.customer : "Sin cliente"}</span>
         </span>
+        <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+          Ganancia {currency(sale.profit)}
+        </span>
       </div>
       <p className="mt-0.5 break-words text-sm font-medium text-slate-700">
         Producto: {saleProductLabel(sale, products)}
       </p>
-      <p className="mt-0.5 text-xs text-slate-500">{sale.detail}</p>
+      <p className="mt-0.5 text-xs text-slate-500">
+        {sale.detail} · Precio final {currency(sale.amount)}
+        {sale.quantity && sale.quantity > 1 ? ` (${currency(unitPrice)} c/u)` : ""}
+      </p>
     </div>
   );
 }
 
 function SaleEditModal({
   sale,
+  products,
   onClose,
   onSubmit,
 }: {
   sale: Movement | null;
+  products: Product[];
   onClose: () => void;
   onSubmit: (input: SaleUpdateInput) => void;
 }) {
@@ -1650,6 +1811,16 @@ function SaleEditModal({
   const [date, setDate] = useState(today());
   const [status, setStatus] = useState<SaleStatus>("entregado");
   const [paymentStatus, setPaymentStatus] = useState<SalePaymentStatus>("pagado");
+  const [unitPrice, setUnitPrice] = useState("");
+  const [lineTotal, setLineTotal] = useState("");
+
+  const product = sale?.productId ? products.find((item) => item.id === sale.productId) : undefined;
+  const quantity = sale?.quantity ?? 1;
+  const unitPriceValue = toPositiveNumber(unitPrice);
+  const lineTotalValue = toPositiveNumber(lineTotal);
+  const effectiveUnitPrice = unitPriceValue > 0 ? unitPriceValue : sale ? saleUnitPrice(sale) : 0;
+  const effectiveLineTotal = lineTotalValue > 0 ? lineTotalValue : effectiveUnitPrice * quantity;
+  const estimatedProfit = product ? (effectiveUnitPrice - product.cost) * quantity : sale?.profit ?? 0;
 
   useEffect(() => {
     if (!sale) return;
@@ -1663,10 +1834,14 @@ function SaleEditModal({
     setDate(sale.date);
     setStatus(saleStatus(sale));
     setPaymentStatus(salePaymentStatus(sale));
+    const currentUnitPrice = saleUnitPrice(sale);
+    setUnitPrice(String(Math.round(currentUnitPrice)));
+    setLineTotal(String(Math.round(sale.amount)));
   }, [sale]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (unitPriceValue <= 0) return;
     onSubmit({
       seller,
       payment,
@@ -1674,6 +1849,7 @@ function SaleEditModal({
       date,
       status,
       paymentStatus,
+      unitPrice: unitPriceValue,
     });
   }
 
@@ -1687,6 +1863,47 @@ function SaleEditModal({
             {VENDORS.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
           </Select>
         </div>
+        {sale?.productId ? (
+          <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-sm font-medium text-slate-700">{saleProductLabel(sale, products)}</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Precio unitario"
+                required
+                type="number"
+                min={1}
+                step="0.01"
+                value={unitPrice}
+                onChange={(event) => {
+                  const nextUnitPrice = event.target.value;
+                  setUnitPrice(nextUnitPrice);
+                  const parsed = toPositiveNumber(nextUnitPrice);
+                  if (parsed > 0) setLineTotal(String(Math.round(parsed * quantity)));
+                }}
+              />
+              <Input
+                label="Precio final"
+                required
+                type="number"
+                min={1}
+                step="0.01"
+                value={lineTotal}
+                onChange={(event) => {
+                  const nextLineTotal = event.target.value;
+                  setLineTotal(nextLineTotal);
+                  const parsed = toPositiveNumber(nextLineTotal);
+                  if (parsed > 0 && quantity > 0) setUnitPrice(String(Math.round(parsed / quantity)));
+                }}
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="text-slate-500">Total {currency(effectiveLineTotal)}</span>
+              <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                Ganancia {currency(estimatedProfit)}
+              </span>
+            </div>
+          </div>
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-3">
           <Select label="Pago" value={payment} onChange={(event) => setPayment(event.target.value as (typeof PAYMENT_METHODS)[number])}>
             {PAYMENT_METHODS.map((method) => <option key={method}>{method}</option>)}
@@ -1985,6 +2202,11 @@ function saleProductLabel(movement: Movement, products: Product[]) {
   if (product) return `${movement.quantity ? `${movement.quantity} ` : ""}${product.name}`;
 
   return movement.detail.replace(/\s+por\s+.+$/i, "");
+}
+
+function saleUnitPrice(movement: Movement) {
+  if (movement.quantity && movement.quantity > 0) return movement.amount / movement.quantity;
+  return movement.amount;
 }
 
 function locationMatches(product: Product, filter: LocationFilter) {

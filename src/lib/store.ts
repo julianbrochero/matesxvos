@@ -218,11 +218,28 @@ function localUpdateSaleStatus(movementId: string, status: NonNullable<Movement[
 
 function localUpdateSale(movementId: string, input: SaleUpdateInput, state: StockState) {
   return {
-    movements: state.movements.map((movement) =>
-      movement.id === movementId && movement.type === "venta"
-        ? { ...movement, ...input, customer: input.customer?.trim() || undefined }
-        : movement,
-    ),
+    movements: state.movements.map((movement) => {
+      if (movement.id !== movementId || movement.type !== "venta") return movement;
+
+      const next = {
+        ...movement,
+        seller: input.seller,
+        payment: input.payment,
+        customer: input.customer?.trim() || undefined,
+        date: input.date,
+        status: input.status,
+        paymentStatus: input.paymentStatus,
+      };
+
+      if (input.unitPrice !== undefined && movement.productId && movement.quantity) {
+        const product = state.products.find((item) => item.id === movement.productId);
+        const amount = input.unitPrice * movement.quantity;
+        const profit = product ? (input.unitPrice - product.cost) * movement.quantity : movement.profit;
+        return { ...next, amount, profit };
+      }
+
+      return next;
+    }),
   };
 }
 

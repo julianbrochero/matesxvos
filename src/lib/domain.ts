@@ -57,6 +57,7 @@ export type SaleUpdateInput = {
   date: string;
   status: "entregado" | "encargado";
   paymentStatus: "pagado" | "no_pagado";
+  unitPrice?: number;
 };
 
 export type ProductInput = Omit<Product, "id" | "sold">;
