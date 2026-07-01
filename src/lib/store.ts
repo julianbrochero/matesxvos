@@ -290,7 +290,8 @@ function saleProductAndQuantity(movement: Movement, products: Product[]) {
 
   const quantity = Number(match[1]);
   const productName = match[2];
-  const product = products.find((item) => item.name.toLowerCase() === productName.toLowerCase());
+  const matchingProducts = products.filter((item) => item.name.toLowerCase() === productName.toLowerCase());
+  const product = matchingProducts.length === 1 ? matchingProducts[0] : null;
 
   if (!product || !Number.isFinite(quantity) || quantity <= 0) return null;
   return { productId: product.id, quantity };

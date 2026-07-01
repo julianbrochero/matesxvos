@@ -227,14 +227,18 @@ function AppShell({
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
-      <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white p-4 lg:block">
-        <Brand />
-        <nav className="mt-6 grid gap-1">
+      <aside className="hidden w-64 shrink-0 border-r border-teal-950/20 bg-gradient-to-b from-teal-950 via-cyan-950 to-slate-950 p-4 text-white shadow-2xl lg:block">
+        <Brand inverse />
+        <nav className="mt-6 grid gap-2">
           {navItems.map((item) => (
             <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
           ))}
         </nav>
-        <Button className="mt-6 w-full justify-start" variant="ghost" onClick={() => void logout()}>
+        <Button
+          className="mt-6 w-full justify-start border border-white/10 bg-white/5 text-teal-50 hover:bg-white/10 hover:text-white"
+          variant="ghost"
+          onClick={() => void logout()}
+        >
           <LogOut className="h-4 w-4" />
           Salir
         </Button>
@@ -243,14 +247,20 @@ function AppShell({
       {menuOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button className="absolute inset-0 bg-black/20" type="button" aria-label="Cerrar menu" onClick={() => setMenuOpen(false)} />
-          <aside className="relative h-full w-[82vw] max-w-xs bg-white p-4 shadow-xl">
+          <aside className="relative h-full w-[82vw] max-w-xs bg-gradient-to-b from-teal-950 via-cyan-950 to-slate-950 p-4 text-white shadow-xl">
             <div className="flex items-center justify-between gap-3">
-              <Brand />
-              <Button variant="ghost" size="icon" onClick={() => setMenuOpen(false)} aria-label="Cerrar menu">
+              <Brand inverse />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-teal-50 hover:bg-white/10 hover:text-white"
+                onClick={() => setMenuOpen(false)}
+                aria-label="Cerrar menu"
+              >
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <nav className="mt-6 grid gap-1">
+            <nav className="mt-6 grid gap-2">
               {navItems.map((item) => (
                 <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
               ))}
@@ -286,11 +296,23 @@ function AppShell({
   );
 }
 
-function Brand({ compact }: { compact?: boolean }) {
+function Brand({ compact, inverse }: { compact?: boolean; inverse?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className={cn("truncate font-semibold tracking-tight", compact ? "text-base" : "text-lg")}>Mates x Vos</p>
-      {!compact ? <p className="text-xs text-slate-500">Inventario simple</p> : null}
+      <p
+        className={cn(
+          "truncate font-semibold tracking-tight",
+          compact ? "text-base" : "text-lg",
+          inverse ? "text-white" : "text-slate-950",
+        )}
+      >
+        Mates x Vos
+      </p>
+      {!compact ? (
+        <p className={cn("text-xs", inverse ? "text-teal-100/80" : "text-slate-500")}>
+          Inventario por sucursal
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -310,8 +332,10 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition",
-        active ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
+        "flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition",
+        active
+          ? "bg-white text-teal-950 shadow-lg shadow-black/20"
+          : "border border-transparent text-teal-50/80 hover:border-white/10 hover:bg-white/10 hover:text-white",
       )}
     >
       <Icon className="h-4 w-4" />
@@ -390,16 +414,18 @@ function StockView({ setView }: { setView: (view: View) => void }) {
   const [editing, setEditing] = useState<Product | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const filtered = products.filter((product) => {
-    const query = `${product.name} ${product.brand} ${productLocation(product)}`.toLowerCase();
-    const matches = query.includes(search.toLowerCase());
-    const locationOk = locationMatches(product, locationFilter);
-    const statusOk =
-      stockFilter === "todos" ||
-      (stockFilter === "bajo" && product.stock <= LOW_STOCK_LIMIT) ||
-      (stockFilter === "ok" && product.stock > LOW_STOCK_LIMIT);
-    return matches && locationOk && statusOk;
-  });
+  const filtered = products
+    .filter((product) => {
+      const query = `${product.name} ${product.brand} ${productLocation(product)}`.toLowerCase();
+      const matches = query.includes(search.toLowerCase());
+      const locationOk = locationMatches(product, locationFilter);
+      const statusOk =
+        stockFilter === "todos" ||
+        (stockFilter === "bajo" && product.stock <= LOW_STOCK_LIMIT) ||
+        (stockFilter === "ok" && product.stock > LOW_STOCK_LIMIT);
+      return matches && locationOk && statusOk;
+    })
+    .sort(compareProductsByLocation);
 
   return (
     <section className="grid gap-5">
@@ -441,6 +467,7 @@ function StockView({ setView }: { setView: (view: View) => void }) {
               <th className="px-4 py-3">Proveedor</th>
               <th className="px-4 py-3">Ubicacion</th>
               <th className="px-4 py-3">Stock</th>
+              <th className="px-4 py-3">Costo</th>
               <th className="px-4 py-3">Precio</th>
               <th className="px-4 py-3">Mayorista</th>
               <th className="px-4 py-3 text-right">Acciones</th>
@@ -450,12 +477,18 @@ function StockView({ setView }: { setView: (view: View) => void }) {
             {filtered.map((product) => (
               <tr key={product.id} className={stockLocationRowClass(productLocation(product))}>
                 <td className="px-4 py-3"><ProductThumb product={product} /></td>
-                <td className="px-4 py-3 font-medium">{product.name}</td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{product.name}</span>
+                    <LocationBadge location={productLocation(product)} />
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-slate-600">{product.brand}</td>
-                <td className="px-4 py-3 text-slate-600">{productLocation(product)}</td>
+                <td className="px-4 py-3"><LocationBadge location={productLocation(product)} /></td>
                 <td className="px-4 py-3">
                   <StockEditor product={product} onSave={(stock) => void saveStock(product, stock, updateStock, notify)} />
                 </td>
+                <td className="px-4 py-3 font-medium">{currency(product.cost)}</td>
                 <td className="px-4 py-3 font-medium">{currency(product.price)}</td>
                 <td className="px-4 py-3 font-medium">{product.wholesalePrice ? currency(product.wholesalePrice) : "-"}</td>
                 <td className="px-4 py-3">
@@ -483,7 +516,10 @@ function StockView({ setView }: { setView: (view: View) => void }) {
                 <ProductThumb product={product} />
                 <div className="min-w-0">
                   <p className="break-words font-medium">{product.name}</p>
-                  <p className="mt-1 text-sm text-slate-500">{product.brand} - {productLocation(product)}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <p className="text-sm text-slate-500">{product.brand}</p>
+                    <LocationBadge location={productLocation(product)} />
+                  </div>
                 </div>
               </div>
               <StockPill product={product} />
@@ -1127,7 +1163,9 @@ function PricesView() {
   const notify = useAlertStore((state) => state.notify);
   const [generating, setGenerating] = useState(false);
   const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
-  const availableProducts = products.filter((product) => product.stock > 0 && locationMatches(product, locationFilter));
+  const availableProducts = products
+    .filter((product) => product.stock > 0 && locationMatches(product, locationFilter))
+    .sort(compareProductsByLocation);
 
   async function handleDownload() {
     setGenerating(true);
@@ -1163,7 +1201,10 @@ function PricesView() {
               <ProductThumb product={product} />
               <div className="min-w-0">
                 <p className="font-medium">{product.name}</p>
-                <p className="text-sm text-slate-500">{product.brand} - {productLocation(product)}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-slate-500">{product.brand}</p>
+                  <LocationBadge location={productLocation(product)} />
+                </div>
               </div>
               <p className="font-medium">{currency(product.price)}</p>
             </div>
@@ -1194,9 +1235,9 @@ function WholesaleView() {
   const [addItemQty, setAddItemQty] = useState("1");
   const [addItemPrice, setAddItemPrice] = useState("");
 
-  const wholesaleProducts = products.filter(
-    (product) => product.stock > 0 && product.wholesalePrice && locationMatches(product, locationFilter)
-  );
+  const wholesaleProducts = products
+    .filter((product) => product.stock > 0 && product.wholesalePrice && locationMatches(product, locationFilter))
+    .sort(compareProductsByLocation);
   const missingPrice = products.filter((product) => product.stock > 0 && !product.wholesalePrice).length;
 
   const selectedProduct = products.find((p) => p.id === selectedProductId);
@@ -1395,7 +1436,11 @@ function WholesaleView() {
                   <ProductThumb product={product} />
                   <div className="min-w-0">
                     <p className="font-medium">{product.name}</p>
-                    <p className="text-sm text-slate-500">{product.brand} - {productLocation(product)} - {product.stock} u.</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-sm text-slate-500">{product.brand}</p>
+                      <LocationBadge location={productLocation(product)} />
+                      <p className="text-sm text-slate-500">{product.stock} u.</p>
+                    </div>
                   </div>
                   <div className="text-left sm:text-right">
                     <p className="font-medium">{currency(product.wholesalePrice ?? product.price)}</p>
@@ -1429,7 +1474,7 @@ function WholesaleView() {
                   <option value="custom">— Ítem personalizado —</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} ({p.brand}) - Stock: {p.stock}
+                      {p.name} ({productLocation(p)}) - ${p.wholesalePrice ?? p.price} - Stock: {p.stock}
                     </option>
                   ))}
                 </Select>
@@ -1660,12 +1705,17 @@ function StockLocationReference() {
   return (
     <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-slate-600">
       {LOCATIONS.map((location) => (
-        <div key={location} className="flex items-center gap-2">
-          <span className={cn("h-3 w-6 rounded-full border", stockLocationSwatchClass(location))} />
-          {location}
-        </div>
+        <LocationBadge key={location} location={location} />
       ))}
     </div>
+  );
+}
+
+function LocationBadge({ location }: { location: LocationName }) {
+  return (
+    <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", locationBadgeClass(location))}>
+      {location}
+    </span>
   );
 }
 
@@ -1692,15 +1742,21 @@ function ProductThumb({ product }: { product: Product }) {
 }
 
 function stockLocationRowClass(location: LocationName) {
-  return location === "Villa Maria" ? "bg-amber-50/80 hover:bg-amber-100/80" : "bg-sky-50/80 hover:bg-sky-100/80";
+  return location === "Villa Maria"
+    ? "bg-amber-50/90 hover:bg-amber-100"
+    : "bg-sky-50/90 hover:bg-sky-100";
 }
 
 function stockLocationCardClass(location: LocationName) {
-  return location === "Villa Maria" ? "border-amber-200 bg-amber-50/80" : "border-sky-200 bg-sky-50/80";
+  return location === "Villa Maria"
+    ? "border-amber-200 bg-amber-50/90"
+    : "border-sky-200 bg-sky-50/90";
 }
 
-function stockLocationSwatchClass(location: LocationName) {
-  return location === "Villa Maria" ? "border-amber-300 bg-amber-100" : "border-sky-300 bg-sky-100";
+function locationBadgeClass(location: LocationName) {
+  return location === "Villa Maria"
+    ? "border-amber-300 bg-amber-100 text-amber-900"
+    : "border-sky-300 bg-sky-100 text-sky-900";
 }
 
 function StockPill({ product }: { product: Product }) {
@@ -2351,6 +2407,14 @@ function normalizeLocation(location?: string): LocationName {
   return LOCATIONS.find((option) => option.toLowerCase() === location?.toLowerCase()) ?? LOCATIONS[0];
 }
 
+function compareProductsByLocation(a: Product, b: Product) {
+  return (
+    LOCATIONS.indexOf(productLocation(a)) - LOCATIONS.indexOf(productLocation(b)) ||
+    a.name.localeCompare(b.name) ||
+    a.brand.localeCompare(b.brand)
+  );
+}
+
 function toPositiveInteger(value: string) {
   const number = Math.floor(Number(value));
   return Number.isFinite(number) && number > 0 ? number : 1;
@@ -2400,10 +2464,11 @@ type PdfImage = {
 async function downloadPricePdf(products: (Product & { quantity?: number })[], mode: PricePdfMode, clientName?: string) {
   if (!products.length) return;
 
+  const pdfProducts = mode === "quote" ? products : [...products].sort(compareProductsByLocation);
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const imageMap = await loadProductImages(products);
+  const imageMap = await loadProductImages(pdfProducts);
   const isWholesale = mode === "wholesale";
   const isQuote = mode === "quote";
 
@@ -2456,7 +2521,7 @@ async function downloadPricePdf(products: (Product & { quantity?: number })[], m
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(71, 85, 105);
-    doc.text(`${products.length} productos disponibles`, 40, 113);
+    doc.text(`${pdfProducts.length} productos disponibles`, 40, 113);
     doc.text(`Fecha de emisión: ${today()}`, pageWidth - 180, 98);
     doc.text("Precios sujetos a variación", pageWidth - 180, 113);
   }
@@ -2466,7 +2531,7 @@ async function downloadPricePdf(products: (Product & { quantity?: number })[], m
     ? [["Foto", "Producto", "Cant.", "P. Unitario", "Total"]]
     : [["Foto", "Producto", "Ubicación", "Precio"]];
 
-  const bodyData = products.map((product) => {
+  const bodyData = pdfProducts.map((product) => {
     if (isQuote) {
       return [
         product.id,
@@ -2568,7 +2633,7 @@ async function downloadPricePdf(products: (Product & { quantity?: number })[], m
 
   if (isQuote) {
     const finalY = (doc as any).lastAutoTable.finalY || startY;
-    const total = products.reduce((sum, item) => sum + (item.wholesalePrice ?? item.price) * (item.quantity ?? 1), 0);
+    const total = pdfProducts.reduce((sum, item) => sum + (item.wholesalePrice ?? item.price) * (item.quantity ?? 1), 0);
 
     // Draw total block at the bottom right
     doc.setFillColor(248, 250, 252);
