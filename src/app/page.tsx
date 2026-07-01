@@ -43,6 +43,10 @@ type SaleLineItem = {
   productId: string;
   quantity: number;
   unitPrice: number;
+  unitCost: number;
+  unitPriceInput: string;
+  lineTotalInput: string;
+  unitCostInput: string;
 };
 type Notify = (alert: { type: AlertType; title: string; message?: string; persistent?: boolean }) => void;
 
@@ -560,14 +564,17 @@ function SalesView() {
     [products, saleLocation],
   );
   const quantityValue = toPositiveInteger(quantity);
-  const unitPriceValue = toPositiveNumber(salePrice);
-  const effectiveUnitPrice = unitPriceValue > 0 ? unitPriceValue : selected?.price ?? 0;
+  const parsedSalePrice = parseOptionalPrice(salePrice);
+  const effectiveUnitPrice = parsedSalePrice ?? selected?.price ?? 0;
   const lineTotal = effectiveUnitPrice * quantityValue;
-  const cartTotal = cart.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const cartTotal = cart.reduce((sum, item) => {
+    const unitPrice = parseOptionalPrice(item.unitPriceInput) ?? item.unitPrice;
+    return sum + item.quantity * unitPrice;
+  }, 0);
   const cartProfit = cart.reduce((sum, item) => {
-    const product = products.find((entry) => entry.id === item.productId);
-    if (!product) return sum;
-    return sum + (item.unitPrice - product.cost) * item.quantity;
+    const unitPrice = parseOptionalPrice(item.unitPriceInput) ?? item.unitPrice;
+    const unitCost = parseOptionalPrice(item.unitCostInput) ?? item.unitCost;
+    return sum + (unitPrice - unitCost) * item.quantity;
   }, 0);
   const sales = movements.filter((movement) => movement.type === "venta");
   const visibleSales = sales.filter((sale) => {
@@ -597,7 +604,8 @@ function SalesView() {
 
   function addLineToCart() {
     if (!selected) return;
-    if (unitPriceValue <= 0) {
+    const parsedPrice = parseOptionalPrice(salePrice);
+    if (!parsedPrice) {
       notify({ type: "warning", title: "Ingresá un precio de venta válido" });
       return;
     }
@@ -612,7 +620,11 @@ function SalesView() {
         id: crypto.randomUUID(),
         productId,
         quantity: quantityValue,
-        unitPrice: unitPriceValue,
+        unitPrice: parsedPrice,
+        unitCost: selected.cost,
+        unitPriceInput: salePrice,
+        lineTotalInput: String(Math.round(parsedPrice * quantityValue)),
+        unitCostInput: String(selected.cost),
       },
     ]);
     setQuantity("1");
@@ -623,16 +635,47 @@ function SalesView() {
   }
 
   function updateCartLineUnitPrice(lineId: string, value: string) {
-    const unitPrice = toPositiveNumber(value);
-    if (unitPrice <= 0) return;
-    setCart((items) => items.map((item) => (item.id === lineId ? { ...item, unitPrice } : item)));
+    setCart((items) =>
+      items.map((item) => {
+        if (item.id !== lineId) return item;
+        const parsed = parseOptionalPrice(value);
+        return {
+          ...item,
+          unitPriceInput: value,
+          unitPrice: parsed ?? item.unitPrice,
+          lineTotalInput: parsed ? String(Math.round(parsed * item.quantity)) : item.lineTotalInput,
+        };
+      }),
+    );
   }
 
   function updateCartLineTotal(lineId: string, value: string) {
-    const lineTotal = toPositiveNumber(value);
-    if (lineTotal <= 0) return;
     setCart((items) =>
-      items.map((item) => (item.id === lineId ? { ...item, unitPrice: lineTotal / item.quantity } : item)),
+      items.map((item) => {
+        if (item.id !== lineId) return item;
+        const parsed = parseOptionalPrice(value);
+        const unitPrice = parsed && item.quantity > 0 ? parsed / item.quantity : item.unitPrice;
+        return {
+          ...item,
+          lineTotalInput: value,
+          unitPrice,
+          unitPriceInput: parsed && item.quantity > 0 ? String(Math.round(unitPrice)) : item.unitPriceInput,
+        };
+      }),
+    );
+  }
+
+  function updateCartLineUnitCost(lineId: string, value: string) {
+    setCart((items) =>
+      items.map((item) => {
+        if (item.id !== lineId) return item;
+        const parsed = parseOptionalPrice(value);
+        return {
+          ...item,
+          unitCostInput: value,
+          unitCost: parsed ?? item.unitCost,
+        };
+      }),
     );
   }
 
@@ -654,10 +697,18 @@ function SalesView() {
 
     for (const item of cart) {
       const product = products.find((entry) => entry.id === item.productId);
+      const unitPrice = parseOptionalPrice(item.unitPriceInput);
+      const unitCost = parseOptionalPrice(item.unitCostInput);
+      if (!unitPrice || !unitCost) {
+        notify({ type: "warning", title: "Revisá precios y costos", message: product?.name });
+        return;
+      }
+
       const ok = await registerSale({
         productId: item.productId,
         quantity: item.quantity,
-        unitPrice: item.unitPrice,
+        unitPrice,
+        unitCost,
         ...saleMeta,
       });
       if (!ok) {
@@ -883,8 +934,10 @@ function SalesView() {
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Productos en la venta</p>
               {cart.map((item) => {
                 const product = products.find((entry) => entry.id === item.productId);
-                const lineTotal = item.quantity * item.unitPrice;
-                const lineProfit = product ? (item.unitPrice - product.cost) * item.quantity : 0;
+                const unitPrice = parseOptionalPrice(item.unitPriceInput) ?? item.unitPrice;
+                const unitCost = parseOptionalPrice(item.unitCostInput) ?? item.unitCost;
+                const lineTotalAmount = item.quantity * unitPrice;
+                const lineProfit = (unitPrice - unitCost) * item.quantity;
                 return (
                   <div key={item.id} className="grid gap-2 rounded-md border border-slate-100 bg-slate-50 p-3 text-sm">
                     <div className="flex items-start justify-between gap-3">
@@ -896,26 +949,34 @@ function SalesView() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-3">
                       <Input
                         label="Precio unitario"
                         type="number"
-                        min={1}
+                        min={0}
                         step="0.01"
-                        value={String(Math.round(item.unitPrice))}
+                        value={item.unitPriceInput}
                         onChange={(event) => updateCartLineUnitPrice(item.id, event.target.value)}
                       />
                       <Input
                         label="Precio final"
                         type="number"
-                        min={1}
+                        min={0}
                         step="0.01"
-                        value={String(Math.round(lineTotal))}
+                        value={item.lineTotalInput}
                         onChange={(event) => updateCartLineTotal(item.id, event.target.value)}
+                      />
+                      <Input
+                        label="Costo unitario"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={item.unitCostInput}
+                        onChange={(event) => updateCartLineUnitCost(item.id, event.target.value)}
                       />
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <span className="text-slate-500">Subtotal {currency(lineTotal)}</span>
+                      <span className="text-slate-500">Subtotal {currency(lineTotalAmount)}</span>
                       <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">
                         Ganancia {currency(lineProfit)}
                       </span>
@@ -976,6 +1037,7 @@ function SalesView() {
         sale={editingSale}
         products={products}
         onClose={() => setEditingSale(null)}
+        onInvalid={(message) => notify({ type: "warning", title: message })}
         onSubmit={(input) => {
           if (editingSale) void saveSaleEdit(editingSale, input);
         }}
@@ -1172,6 +1234,7 @@ function WholesaleView() {
           location: "N/A",
           quantity: qty,
           price: priceVal,
+          priceInput: addItemPrice,
           imageUrl: undefined,
         },
       ]);
@@ -1192,6 +1255,7 @@ function WholesaleView() {
           const updated = [...current];
           updated[existsIndex].quantity += qty;
           updated[existsIndex].price = priceVal;
+          updated[existsIndex].priceInput = addItemPrice;
           return updated;
         });
       } else {
@@ -1205,6 +1269,7 @@ function WholesaleView() {
             location: selectedProduct.location,
             quantity: qty,
             price: priceVal,
+            priceInput: addItemPrice,
             imageUrl: selectedProduct.imageUrl,
           },
         ]);
@@ -1224,9 +1289,16 @@ function WholesaleView() {
   }
 
   function updateItemPrice(itemId: string, newPriceStr: string) {
-    const price = toPositiveNumber(newPriceStr);
     setQuoteItems((current) =>
-      current.map((item) => (item.id === itemId ? { ...item, price: price } : item))
+      current.map((item) => {
+        if (item.id !== itemId) return item;
+        const parsed = parseOptionalPrice(newPriceStr);
+        return {
+          ...item,
+          priceInput: newPriceStr,
+          price: parsed ?? item.price,
+        };
+      }),
     );
   }
 
@@ -1438,7 +1510,7 @@ function WholesaleView() {
                           type="number"
                           min="1"
                           className="h-8 w-full rounded border border-slate-200 bg-white px-1.5 text-sm outline-none focus:border-slate-400"
-                          value={item.price}
+                          value={item.priceInput ?? String(item.price)}
                           onChange={(e) => updateItemPrice(item.id, e.target.value)}
                           aria-label={`Precio unitario para ${item.name}`}
                         />
@@ -1772,6 +1844,8 @@ function SaleActionMenu({
 
 function SaleSummary({ sale, products }: { sale: Movement; products: Product[] }) {
   const unitPrice = saleUnitPrice(sale);
+  const product = sale.productId ? products.find((item) => item.id === sale.productId) : undefined;
+  const unitCost = saleUnitCost(sale, product);
 
   return (
     <div className="min-w-0">
@@ -1789,6 +1863,7 @@ function SaleSummary({ sale, products }: { sale: Movement; products: Product[] }
       <p className="mt-0.5 text-xs text-slate-500">
         {sale.detail} · Precio final {currency(sale.amount)}
         {sale.quantity && sale.quantity > 1 ? ` (${currency(unitPrice)} c/u)` : ""}
+        {" · "}Costo {currency(unitCost)} c/u
       </p>
     </div>
   );
@@ -1799,11 +1874,13 @@ function SaleEditModal({
   products,
   onClose,
   onSubmit,
+  onInvalid,
 }: {
   sale: Movement | null;
   products: Product[];
   onClose: () => void;
   onSubmit: (input: SaleUpdateInput) => void;
+  onInvalid: (message: string) => void;
 }) {
   const [seller, setSeller] = useState<(typeof VENDORS)[number]>("Julian");
   const [payment, setPayment] = useState<(typeof PAYMENT_METHODS)[number]>("Mercado Pago");
@@ -1813,14 +1890,17 @@ function SaleEditModal({
   const [paymentStatus, setPaymentStatus] = useState<SalePaymentStatus>("pagado");
   const [unitPrice, setUnitPrice] = useState("");
   const [lineTotal, setLineTotal] = useState("");
+  const [unitCost, setUnitCost] = useState("");
 
   const product = sale?.productId ? products.find((item) => item.id === sale.productId) : undefined;
   const quantity = sale?.quantity ?? 1;
-  const unitPriceValue = toPositiveNumber(unitPrice);
-  const lineTotalValue = toPositiveNumber(lineTotal);
-  const effectiveUnitPrice = unitPriceValue > 0 ? unitPriceValue : sale ? saleUnitPrice(sale) : 0;
-  const effectiveLineTotal = lineTotalValue > 0 ? lineTotalValue : effectiveUnitPrice * quantity;
-  const estimatedProfit = product ? (effectiveUnitPrice - product.cost) * quantity : sale?.profit ?? 0;
+  const parsedUnitPrice = parseOptionalPrice(unitPrice);
+  const parsedLineTotal = parseOptionalPrice(lineTotal);
+  const parsedUnitCost = parseOptionalPrice(unitCost);
+  const effectiveUnitPrice = parsedUnitPrice ?? (sale ? saleUnitPrice(sale) : 0);
+  const effectiveLineTotal = parsedLineTotal ?? effectiveUnitPrice * quantity;
+  const effectiveUnitCost = parsedUnitCost ?? (sale ? saleUnitCost(sale, product) : product?.cost ?? 0);
+  const estimatedProfit = (effectiveUnitPrice - effectiveUnitCost) * quantity;
 
   useEffect(() => {
     if (!sale) return;
@@ -1835,13 +1915,22 @@ function SaleEditModal({
     setStatus(saleStatus(sale));
     setPaymentStatus(salePaymentStatus(sale));
     const currentUnitPrice = saleUnitPrice(sale);
+    const currentUnitCost = saleUnitCost(sale, product);
     setUnitPrice(String(Math.round(currentUnitPrice)));
     setLineTotal(String(Math.round(sale.amount)));
-  }, [sale]);
+    setUnitCost(String(Math.round(currentUnitCost)));
+  }, [sale, product]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (unitPriceValue <= 0) return;
+    if (!parsedUnitPrice) {
+      onInvalid("Ingresá un precio de venta válido");
+      return;
+    }
+    if (!parsedUnitCost) {
+      onInvalid("Ingresá un costo válido");
+      return;
+    }
     onSubmit({
       seller,
       payment,
@@ -1849,7 +1938,8 @@ function SaleEditModal({
       date,
       status,
       paymentStatus,
-      unitPrice: unitPriceValue,
+      unitPrice: parsedUnitPrice,
+      unitCost: parsedUnitCost,
     });
   }
 
@@ -1866,34 +1956,43 @@ function SaleEditModal({
         {sale?.productId ? (
           <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="text-sm font-medium text-slate-700">{saleProductLabel(sale, products)}</p>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <Input
                 label="Precio unitario"
                 required
                 type="number"
-                min={1}
+                min={0}
                 step="0.01"
                 value={unitPrice}
                 onChange={(event) => {
                   const nextUnitPrice = event.target.value;
                   setUnitPrice(nextUnitPrice);
-                  const parsed = toPositiveNumber(nextUnitPrice);
-                  if (parsed > 0) setLineTotal(String(Math.round(parsed * quantity)));
+                  const parsed = parseOptionalPrice(nextUnitPrice);
+                  if (parsed !== null && quantity > 0) setLineTotal(String(Math.round(parsed * quantity)));
                 }}
               />
               <Input
                 label="Precio final"
                 required
                 type="number"
-                min={1}
+                min={0}
                 step="0.01"
                 value={lineTotal}
                 onChange={(event) => {
                   const nextLineTotal = event.target.value;
                   setLineTotal(nextLineTotal);
-                  const parsed = toPositiveNumber(nextLineTotal);
-                  if (parsed > 0 && quantity > 0) setUnitPrice(String(Math.round(parsed / quantity)));
+                  const parsed = parseOptionalPrice(nextLineTotal);
+                  if (parsed !== null && quantity > 0) setUnitPrice(String(Math.round(parsed / quantity)));
                 }}
+              />
+              <Input
+                label="Costo unitario"
+                required
+                type="number"
+                min={0}
+                step="0.01"
+                value={unitCost}
+                onChange={(event) => setUnitCost(event.target.value)}
               />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -2207,6 +2306,20 @@ function saleProductLabel(movement: Movement, products: Product[]) {
 function saleUnitPrice(movement: Movement) {
   if (movement.quantity && movement.quantity > 0) return movement.amount / movement.quantity;
   return movement.amount;
+}
+
+function saleUnitCost(movement: Movement, product?: Product) {
+  if (movement.unitCost !== undefined) return movement.unitCost;
+  if (movement.quantity && movement.quantity > 0) {
+    return saleUnitPrice(movement) - movement.profit / movement.quantity;
+  }
+  return product?.cost ?? 0;
+}
+
+function parseOptionalPrice(value: string) {
+  if (!value.trim()) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
 }
 
 function locationMatches(product: Product, filter: LocationFilter) {

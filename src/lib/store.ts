@@ -170,15 +170,16 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
 }
 
 function localRegisterSale(
-  { productId, quantity, unitPrice, seller, payment, customer, date, status, paymentStatus }: SaleInput,
+  { productId, quantity, unitPrice, unitCost, seller, payment, customer, date, status, paymentStatus }: SaleInput,
   state: StockState,
 ) {
   const product = state.products.find((item) => item.id === productId);
   if (!product || product.stock < quantity) return null;
 
   const salePrice = unitPrice > 0 ? unitPrice : product.price;
+  const saleCost = unitCost !== undefined && unitCost > 0 ? unitCost : product.cost;
   const amount = salePrice * quantity;
-  const profit = (salePrice - product.cost) * quantity;
+  const profit = (salePrice - saleCost) * quantity;
 
   return {
     products: state.products.map((item) =>
@@ -196,6 +197,7 @@ function localRegisterSale(
         detail: `${quantity} ${product.name} por ${payment}`,
         amount,
         profit,
+        unitCost: saleCost,
         date,
         seller,
         payment,
@@ -231,11 +233,14 @@ function localUpdateSale(movementId: string, input: SaleUpdateInput, state: Stoc
         paymentStatus: input.paymentStatus,
       };
 
-      if (input.unitPrice !== undefined && movement.productId && movement.quantity) {
+      if (input.unitPrice !== undefined || input.unitCost !== undefined) {
         const product = state.products.find((item) => item.id === movement.productId);
-        const amount = input.unitPrice * movement.quantity;
-        const profit = product ? (input.unitPrice - product.cost) * movement.quantity : movement.profit;
-        return { ...next, amount, profit };
+        const quantity = movement.quantity ?? 1;
+        const unitPrice = input.unitPrice ?? movement.amount / quantity;
+        const unitCost = input.unitCost ?? movement.unitCost ?? product?.cost ?? 0;
+        const amount = unitPrice * quantity;
+        const profit = (unitPrice - unitCost) * quantity;
+        return { ...next, amount, profit, unitCost };
       }
 
       return next;

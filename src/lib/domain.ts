@@ -29,6 +29,7 @@ export type Movement = {
   seller?: string;
   payment?: string;
   customer?: string;
+  unitCost?: number;
 };
 
 export type PurchaseInput = {
@@ -42,6 +43,7 @@ export type SaleInput = {
   productId: string;
   quantity: number;
   unitPrice: number;
+  unitCost?: number;
   seller: string;
   payment: string;
   customer?: string;
@@ -58,6 +60,7 @@ export type SaleUpdateInput = {
   status: "entregado" | "encargado";
   paymentStatus: "pagado" | "no_pagado";
   unitPrice?: number;
+  unitCost?: number;
 };
 
 export type ProductInput = Omit<Product, "id" | "sold">;
