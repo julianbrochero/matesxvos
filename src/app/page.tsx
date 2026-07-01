@@ -19,7 +19,6 @@ import {
   Search,
   ShoppingBag,
   Trash2,
-  Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,10 +29,9 @@ import { AlertToaster } from "@/components/ui/alert-toaster";
 import { type AlertType, useAlertStore } from "@/lib/alerts";
 import { cn, currency, today } from "@/lib/utils";
 import { Movement, Product, type SaleUpdateInput, useStockStore } from "@/lib/store";
+import { LOCATIONS, type LocationFilter, type LocationName, useLocationFilterStore } from "@/lib/location";
 
-type View = "dashboard" | "stock" | "carga" | "ventas" | "precios" | "mayorista";
-type LocationName = "Buenos Aires" | "Villa Maria";
-type LocationFilter = "todos" | LocationName;
+type View = "dashboard" | "stock" | "ventas" | "listas";
 type SaleStatus = "entregado" | "encargado";
 type SaleFilter = "todos" | SaleStatus;
 type SalePaymentStatus = "pagado" | "no_pagado";
@@ -51,7 +49,6 @@ type SaleLineItem = {
 type Notify = (alert: { type: AlertType; title: string; message?: string; persistent?: boolean }) => void;
 
 const LOW_STOCK_LIMIT = 5;
-const LOCATIONS: LocationName[] = ["Buenos Aires", "Villa Maria"];
 const VENDORS = ["Julian", "Santiago", "Agustina"] as const;
 const PAYMENT_METHODS = ["Mercado Pago", "Efectivo", "Transferencia", "Tarjeta", "A definir"] as const;
 const SALE_STATUSES: { id: SaleStatus; label: string }[] = [
@@ -67,9 +64,7 @@ const navItems: { id: View; label: string; short: string; icon: typeof Boxes }[]
   { id: "dashboard", label: "Inicio", short: "Inicio", icon: LayoutDashboard },
   { id: "ventas", label: "Ventas", short: "Ventas", icon: ShoppingBag },
   { id: "stock", label: "Stock", short: "Stock", icon: Boxes },
-  { id: "carga", label: "Carga", short: "Carga", icon: PackagePlus },
-  { id: "precios", label: "Precios", short: "PDF", icon: Download },
-  { id: "mayorista", label: "Mayorista", short: "Mayor", icon: Users },
+  { id: "listas", label: "Listas", short: "Listas", icon: Download },
 ];
 
 export default function Home() {
@@ -126,11 +121,9 @@ export default function Home() {
       <main className="min-h-screen bg-slate-50 text-slate-950">
         <AppShell view={view} setView={setView} onLogout={() => setSignedIn(false)}>
           {view === "dashboard" && <DashboardView setView={setView} />}
-          {view === "stock" && <StockView setView={setView} />}
+          {view === "stock" && <StockView />}
           {view === "ventas" && <SalesView />}
-          {view === "carga" && <PurchasesView />}
-          {view === "precios" && <PricesView />}
-          {view === "mayorista" && <WholesaleView />}
+          {view === "listas" && <ListasView />}
         </AppShell>
       </main>
     </>
@@ -281,10 +274,13 @@ function AppShell({
               </div>
               <p className="hidden text-sm text-slate-500 lg:block">Sistema de stock y ventas</p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => void logout()}>
-              <LogOut className="h-4 w-4" />
-              Salir
-            </Button>
+            <div className="flex items-center gap-3">
+              <LocationSwitcher />
+              <Button variant="ghost" size="sm" onClick={() => void logout()}>
+                <LogOut className="h-4 w-4" />
+                Salir
+              </Button>
+            </div>
           </div>
         </header>
         <div className="grid gap-4 px-4 py-5 sm:px-6 lg:py-6">
@@ -292,6 +288,33 @@ function AppShell({
           {children}
         </div>
       </div>
+    </div>
+  );
+}
+
+function LocationSwitcher() {
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
+  const setLocationFilter = useLocationFilterStore((state) => state.setLocationFilter);
+  const options: { value: LocationFilter; label: string }[] = [
+    { value: "todos", label: "Ambas" },
+    ...LOCATIONS.map((location) => ({ value: location, label: location })),
+  ];
+
+  return (
+    <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => setLocationFilter(option.value)}
+          className={cn(
+            "rounded-md px-2.5 py-1.5 text-xs font-medium transition sm:text-sm",
+            locationFilter === option.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -347,21 +370,30 @@ function NavButton({
 function DashboardView({ setView }: { setView: (view: View) => void }) {
   const products = useStockStore((state) => state.products);
   const movements = useStockStore((state) => state.movements);
-  const metrics = useMemo(() => getMetrics(products, movements), [products, movements]);
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
+  const filteredProducts = useMemo(
+    () => products.filter((product) => locationMatches(product, locationFilter)),
+    [products, locationFilter],
+  );
+  const filteredMovements = useMemo(
+    () => movements.filter((movement) => movementMatchesLocation(movement, products, locationFilter)),
+    [movements, products, locationFilter],
+  );
+  const metrics = useMemo(() => getMetrics(filteredProducts, filteredMovements), [filteredProducts, filteredMovements]);
   const stockByLocation = LOCATIONS.map((location) => ({
     location,
     stock: products
       .filter((product) => productLocation(product) === location)
       .reduce((sum, product) => sum + product.stock, 0),
   }));
-  const lowProducts = products.filter((product) => product.stock <= LOW_STOCK_LIMIT);
-  const recent = movements.slice(0, 6);
+  const lowProducts = filteredProducts.filter((product) => product.stock <= LOW_STOCK_LIMIT);
+  const recent = filteredMovements.slice(0, 6);
 
   return (
     <section className="grid gap-5">
       <PageHeader
         title="Inicio"
-        description="Resumen rapido del negocio."
+        description={locationFilter === "todos" ? "Resumen rapido del negocio." : `Resumen rapido de ${locationFilter}.`}
         action={
           <Button onClick={() => setView("ventas")}>
             <Plus className="h-4 w-4" />
@@ -371,9 +403,15 @@ function DashboardView({ setView }: { setView: (view: View) => void }) {
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Productos" value={String(products.length)} />
-        <SummaryCard label="Buenos Aires" value={`${stockByLocation[0]?.stock ?? 0} u.`} />
-        <SummaryCard label="Villa Maria" value={`${stockByLocation[1]?.stock ?? 0} u.`} />
+        <SummaryCard label="Productos" value={String(filteredProducts.length)} />
+        {locationFilter === "todos" ? (
+          <>
+            <SummaryCard label="Buenos Aires" value={`${stockByLocation[0]?.stock ?? 0} u.`} />
+            <SummaryCard label="Villa Maria" value={`${stockByLocation[1]?.stock ?? 0} u.`} />
+          </>
+        ) : (
+          <SummaryCard label={`Stock ${locationFilter}`} value={`${metrics.stock} u.`} />
+        )}
         <SummaryCard label="Ventas" value={currency(metrics.sales)} />
       </div>
 
@@ -401,16 +439,17 @@ function DashboardView({ setView }: { setView: (view: View) => void }) {
   );
 }
 
-function StockView({ setView }: { setView: (view: View) => void }) {
+function StockView() {
   const products = useStockStore((state) => state.products);
   const addProduct = useStockStore((state) => state.addProduct);
   const updateProduct = useStockStore((state) => state.updateProduct);
   const deleteProduct = useStockStore((state) => state.deleteProduct);
   const updateStock = useStockStore((state) => state.updateStock);
   const notify = useAlertStore((state) => state.notify);
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
+  const [activeTab, setActiveTab] = useState<"inventario" | "carga">("inventario");
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState("todos");
-  const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
   const [editing, setEditing] = useState<Product | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -429,30 +468,52 @@ function StockView({ setView }: { setView: (view: View) => void }) {
 
   return (
     <section className="grid gap-5">
-      <PageHeader
-        title="Stock"
-        description="Productos, precios y ubicacion."
-        action={
-          <Button onClick={() => setModalOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Producto
-          </Button>
-        }
-      />
+      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
+        <PageHeader title="Stock" description="Productos, precios, ubicacion y carga de mercaderia." />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-2 rounded-lg bg-slate-100 p-1">
+            <button
+              type="button"
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium transition",
+                activeTab === "inventario" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+              )}
+              onClick={() => setActiveTab("inventario")}
+            >
+              Inventario
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium transition",
+                activeTab === "carga" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+              )}
+              onClick={() => setActiveTab("carga")}
+            >
+              Cargar stock
+            </button>
+          </div>
+          {activeTab === "inventario" ? (
+            <Button onClick={() => setModalOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Producto
+            </Button>
+          ) : null}
+        </div>
+      </div>
 
+      {activeTab === "carga" ? (
+        <StockLoadTab />
+      ) : (
+        <>
       <Panel>
-        <div className="grid gap-3 md:grid-cols-[1fr_180px_180px_auto]">
+        <div className="grid gap-3 md:grid-cols-[1fr_200px]">
           <SearchInput value={search} onChange={setSearch} placeholder="Buscar producto" />
-          <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
           <Select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)} aria-label="Filtro de stock">
             <option value="todos">Todos</option>
             <option value="ok">Stock OK</option>
             <option value="bajo">Stock bajo</option>
           </Select>
-          <Button variant="secondary" onClick={() => setView("carga")}>
-            <PackagePlus className="h-4 w-4" />
-            Cargar stock
-          </Button>
         </div>
       </Panel>
 
@@ -542,6 +603,8 @@ function StockView({ setView }: { setView: (view: View) => void }) {
         ))}
         {!filtered.length ? <EmptyState title="Sin productos" text="Agrega productos para empezar." /> : null}
       </div>
+        </>
+      )}
 
       <ProductModal
         open={modalOpen}
@@ -580,8 +643,8 @@ function SalesView() {
   const [actionMenuId, setActionMenuId] = useState("");
   const [statusFilter, setStatusFilter] = useState<SaleFilter>("todos");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<SalePaymentFilter>("todos");
-  const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
-  const [saleLocation, setSaleLocation] = useState<LocationName>("Buenos Aires");
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
+  const [saleLocation, setSaleLocation] = useState<LocationName>(locationFilter === "todos" ? LOCATIONS[0] : locationFilter);
   const [productId, setProductId] = useState(products[0]?.id ?? "");
   const [quantity, setQuantity] = useState("1");
   const [salePrice, setSalePrice] = useState("");
@@ -619,6 +682,10 @@ function SalesView() {
     const locationOk = movementMatchesLocation(sale, products, locationFilter);
     return statusOk && paymentStatusOk && locationOk;
   });
+
+  useEffect(() => {
+    if (locationFilter !== "todos") setSaleLocation(locationFilter);
+  }, [locationFilter]);
 
   useEffect(() => {
     if (saleProducts.some((product) => product.id === productId)) return;
@@ -817,14 +884,13 @@ function SalesView() {
       />
 
       <Panel>
-        <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_180px] lg:items-center">
+        <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px] lg:items-center">
           <div className="flex flex-wrap gap-2">
             <SummaryPill label="Total" value={String(visibleSales.length)} />
             <SummaryPill label="Encargos" value={String(sales.filter((sale) => saleStatus(sale) === "encargado").length)} />
             <SummaryPill label="Pagadas" value={String(sales.filter((sale) => salePaymentStatus(sale) === "pagado").length)} />
             <SummaryPill label="Vendido" value={currency(visibleSales.reduce((sum, sale) => sum + sale.amount, 0))} />
           </div>
-          <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
           <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as SaleFilter)} aria-label="Filtrar ventas">
             <option value="todos">Todos</option>
             {SALE_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
@@ -1082,7 +1148,7 @@ function SalesView() {
   );
 }
 
-function PurchasesView() {
+function StockLoadTab() {
   const products = useStockStore((state) => state.products);
   const movements = useStockStore((state) => state.movements);
   const registerPurchase = useStockStore((state) => state.registerPurchase);
@@ -1119,8 +1185,7 @@ function PurchasesView() {
   return (
     <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <div className="grid gap-5">
-        <PageHeader title="Carga" description="Ingreso rapido de mercaderia." />
-        <Panel title="Agregar stock">
+        <Panel title="Agregar stock" subtitle="Ingreso rapido de mercaderia.">
           <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
             <Select label="Ubicacion" value={stockLocation} onChange={(event) => setStockLocation(event.target.value as LocationName)}>
               {LOCATIONS.map((location) => <option key={location} value={location}>{location}</option>)}
@@ -1158,11 +1223,11 @@ function PurchasesView() {
   );
 }
 
-function PricesView() {
+function RetailPriceList() {
   const products = useStockStore((state) => state.products);
   const notify = useAlertStore((state) => state.notify);
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
   const [generating, setGenerating] = useState(false);
-  const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
   const availableProducts = products
     .filter((product) => product.stock > 0 && locationMatches(product, locationFilter))
     .sort(compareProductsByLocation);
@@ -1180,13 +1245,9 @@ function PricesView() {
   }
 
   return (
-    <section className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+    <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
       <div className="grid gap-5">
-        <PageHeader title="Precios" description="Lista simple para clientes." />
-        <Panel title="PDF">
-          <div className="mb-3">
-            <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
-          </div>
+        <Panel title="PDF minorista" subtitle="Lista simple para clientes.">
           <Button className="w-full" disabled={!availableProducts.length || generating} onClick={() => void handleDownload()}>
             <Download className="h-4 w-4" />
             {generating ? "Generando..." : "Descargar PDF"}
@@ -1212,33 +1273,132 @@ function PricesView() {
           {!availableProducts.length ? <EmptyState title="Sin productos" text="Carga stock para crear la lista." /> : null}
         </div>
       </Panel>
+    </div>
+  );
+}
+
+function ListasView() {
+  const [activeTab, setActiveTab] = useState<"minorista" | "mayorista" | "presupuestador">("minorista");
+
+  return (
+    <section className="grid gap-5">
+      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
+        <PageHeader title="Listas" description="Precios minoristas, catálogo mayorista y presupuestador." />
+        <div className="flex gap-2 rounded-lg bg-slate-100 p-1 self-start sm:self-auto">
+          <button
+            type="button"
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition",
+              activeTab === "minorista" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+            )}
+            onClick={() => setActiveTab("minorista")}
+          >
+            Minorista
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition",
+              activeTab === "mayorista" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+            )}
+            onClick={() => setActiveTab("mayorista")}
+          >
+            Mayorista
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition",
+              activeTab === "presupuestador" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+            )}
+            onClick={() => setActiveTab("presupuestador")}
+          >
+            Armar Presupuesto
+          </button>
+        </div>
+      </div>
+
+      {activeTab === "minorista" && <RetailPriceList />}
+      {activeTab === "mayorista" && <WholesalePriceList />}
+      {activeTab === "presupuestador" && <QuoteBuilder />}
     </section>
   );
 }
 
-function WholesaleView() {
+function WholesalePriceList() {
   const products = useStockStore((state) => state.products);
   const notify = useAlertStore((state) => state.notify);
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
   const [generating, setGenerating] = useState(false);
-  const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
-  
-  // Tabs: "lista" | "presupuestador"
-  const [activeTab, setActiveTab] = useState<"lista" | "presupuestador">("lista");
-  
-  // Quote Builder States
-  const [clientName, setClientName] = useState("");
-  const [quoteItems, setQuoteItems] = useState<any[]>([]);
-  
-  // Form states for adding items
-  const [selectedProductId, setSelectedProductId] = useState<string>("custom");
-  const [customItemName, setCustomItemName] = useState("");
-  const [addItemQty, setAddItemQty] = useState("1");
-  const [addItemPrice, setAddItemPrice] = useState("");
 
   const wholesaleProducts = products
     .filter((product) => product.stock > 0 && product.wholesalePrice && locationMatches(product, locationFilter))
     .sort(compareProductsByLocation);
   const missingPrice = products.filter((product) => product.stock > 0 && !product.wholesalePrice).length;
+
+  async function handleDownload() {
+    setGenerating(true);
+    try {
+      await downloadPricePdf(wholesaleProducts, "wholesale");
+      notify({ type: "success", title: "PDF mayorista generado", message: `${wholesaleProducts.length} productos` });
+    } catch {
+      notify({ type: "error", title: "No pudimos generar el PDF", message: "Revisá las imágenes o intentá de nuevo" });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+      <div className="grid gap-5">
+        <Panel title="PDF mayorista" subtitle={missingPrice ? `${missingPrice} productos sin precio mayorista` : "Lista lista para compartir"}>
+          <Button className="w-full" disabled={!wholesaleProducts.length || generating} onClick={() => void handleDownload()}>
+            <Download className="h-4 w-4" />
+            {generating ? "Generando..." : "Descargar PDF"}
+          </Button>
+        </Panel>
+      </div>
+
+      <Panel title="Lista mayorista" subtitle={`${wholesaleProducts.length} productos disponibles`}>
+        <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+          {wholesaleProducts.map((product) => (
+            <div key={product.id} className="grid gap-3 p-3 sm:grid-cols-[48px_1fr_auto] sm:items-center">
+              <ProductThumb product={product} />
+              <div className="min-w-0">
+                <p className="font-medium">{product.name}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-slate-500">{product.brand}</p>
+                  <LocationBadge location={productLocation(product)} />
+                  <p className="text-sm text-slate-500">{product.stock} u.</p>
+                </div>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="font-medium">{currency(product.wholesalePrice ?? product.price)}</p>
+                <p className="text-xs text-slate-500">Minorista {currency(product.price)}</p>
+              </div>
+            </div>
+          ))}
+          {!wholesaleProducts.length ? <EmptyState title="Sin productos mayoristas" text="Agrega precio mayorista en cada producto." /> : null}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function QuoteBuilder() {
+  const products = useStockStore((state) => state.products);
+  const notify = useAlertStore((state) => state.notify);
+  const [generating, setGenerating] = useState(false);
+
+  // Quote Builder States
+  const [clientName, setClientName] = useState("");
+  const [quoteItems, setQuoteItems] = useState<any[]>([]);
+
+  // Form states for adding items
+  const [selectedProductId, setSelectedProductId] = useState<string>("custom");
+  const [customItemName, setCustomItemName] = useState("");
+  const [addItemQty, setAddItemQty] = useState("1");
+  const [addItemPrice, setAddItemPrice] = useState("");
 
   const selectedProduct = products.find((p) => p.id === selectedProductId);
 
@@ -1347,18 +1507,6 @@ function WholesaleView() {
     setQuoteItems((current) => current.filter((item) => item.id !== itemId));
   }
 
-  async function handleDownload() {
-    setGenerating(true);
-    try {
-      await downloadPricePdf(wholesaleProducts, "wholesale");
-      notify({ type: "success", title: "PDF mayorista generado", message: `${wholesaleProducts.length} productos` });
-    } catch {
-      notify({ type: "error", title: "No pudimos generar el PDF", message: "Revisá las imágenes o intentá de nuevo" });
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   async function handleDownloadQuote() {
     if (!quoteItems.length) return;
     setGenerating(true);
@@ -1388,71 +1536,6 @@ function WholesaleView() {
   }
 
   return (
-    <section className="grid gap-5">
-      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
-        <PageHeader title="Módulo Mayorista" description="Gestión de catálogo y presupuestador para clientes." />
-        <div className="flex gap-2 rounded-lg bg-slate-100 p-1 self-start sm:self-auto">
-          <button
-            type="button"
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition",
-              activeTab === "lista" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-            )}
-            onClick={() => setActiveTab("lista")}
-          >
-            Lista de Precios
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition",
-              activeTab === "presupuestador" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-            )}
-            onClick={() => setActiveTab("presupuestador")}
-          >
-            Armar Presupuesto
-          </button>
-        </div>
-      </div>
-
-      {activeTab === "lista" ? (
-        <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
-          <div className="grid gap-5">
-            <Panel title="PDF mayorista" subtitle={missingPrice ? `${missingPrice} productos sin precio mayorista` : "Lista lista para compartir"}>
-              <div className="mb-3">
-                <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
-              </div>
-              <Button className="w-full" disabled={!wholesaleProducts.length || generating} onClick={() => void handleDownload()}>
-                <Download className="h-4 w-4" />
-                {generating ? "Generando..." : "Descargar PDF"}
-              </Button>
-            </Panel>
-          </div>
-
-          <Panel title="Lista mayorista" subtitle={`${wholesaleProducts.length} productos disponibles`}>
-            <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
-              {wholesaleProducts.map((product) => (
-                <div key={product.id} className="grid gap-3 p-3 sm:grid-cols-[48px_1fr_auto] sm:items-center">
-                  <ProductThumb product={product} />
-                  <div className="min-w-0">
-                    <p className="font-medium">{product.name}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <p className="text-sm text-slate-500">{product.brand}</p>
-                      <LocationBadge location={productLocation(product)} />
-                      <p className="text-sm text-slate-500">{product.stock} u.</p>
-                    </div>
-                  </div>
-                  <div className="text-left sm:text-right">
-                    <p className="font-medium">{currency(product.wholesalePrice ?? product.price)}</p>
-                    <p className="text-xs text-slate-500">Minorista {currency(product.price)}</p>
-                  </div>
-                </div>
-              ))}
-              {!wholesaleProducts.length ? <EmptyState title="Sin productos mayoristas" text="Agrega precio mayorista en cada producto." /> : null}
-            </div>
-          </Panel>
-        </div>
-      ) : (
         <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="grid gap-5 self-start">
             <Panel title="Detalles del Cliente" subtitle="Cargá los datos del presupuesto.">
@@ -1626,8 +1709,6 @@ function WholesaleView() {
             </div>
           </Panel>
         </div>
-      )}
-    </section>
   );
 }
 
@@ -1681,23 +1762,6 @@ function SearchInput({ value, onChange, placeholder }: { value: string; onChange
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
       <Input className="pl-9" placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
-  );
-}
-
-function LocationFilterSelect({
-  value,
-  onChange,
-  label,
-}: {
-  value: LocationFilter;
-  onChange: (value: LocationFilter) => void;
-  label: string;
-}) {
-  return (
-    <Select value={value} onChange={(event) => onChange(event.target.value as LocationFilter)} aria-label="Filtrar por ubicacion">
-      <option value="todos">{label}</option>
-      {LOCATIONS.map((location) => <option key={location} value={location}>{location}</option>)}
-    </Select>
   );
 }
 
