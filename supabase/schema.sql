@@ -114,6 +114,32 @@ update public.movements
 set status = 'entregado'
 where type = 'venta' and status is null;
 
+alter table public.movements
+add column if not exists location text;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'movements_location_valid'
+      and conrelid = 'public.movements'::regclass
+  ) then
+    alter table public.movements
+    add constraint movements_location_valid
+    check (location is null or location in ('Buenos Aires', 'Villa Maria'));
+  end if;
+end;
+$$;
+
+-- Backfill: copia la ubicación actual del producto a cada movimiento existente
+-- que todavía no tenga una ubicación propia guardada.
+update public.movements m
+set location = p.location
+from public.products p
+where m.location is null
+  and m.product_id = p.id;
+
 create or replace function public.touch_updated_at()
 returns trigger
 language plpgsql
@@ -164,7 +190,7 @@ begin
       cost = p_unit_cost
   where id = p_product_id;
 
-  insert into public.movements (product_id, type, quantity, title, detail, amount, profit, date)
+  insert into public.movements (product_id, type, quantity, title, detail, amount, profit, date, location)
   values (
     p_product_id,
     'compra',
@@ -173,7 +199,8 @@ begin
     p_quantity || ' ' || v_product.name || ' ingresaron al stock',
     v_amount,
     0,
-    p_date
+    p_date,
+    v_product.location
   );
 
   return jsonb_build_object('ok', true, 'amount', v_amount);
@@ -241,7 +268,7 @@ begin
       sold = sold + p_quantity
   where id = p_product_id;
 
-  insert into public.movements (product_id, type, quantity, status, title, detail, amount, profit, date, seller, payment, paid, customer)
+  insert into public.movements (product_id, type, quantity, status, title, detail, amount, profit, date, seller, payment, paid, customer, location)
   values (
     p_product_id,
     'venta',
@@ -255,10 +282,64 @@ begin
     p_seller,
     p_payment,
     coalesce(p_paid, true),
-    nullif(trim(coalesce(p_customer, '')), '')
+    nullif(trim(coalesce(p_customer, '')), ''),
+    v_product.location
   );
 
   return jsonb_build_object('ok', true, 'amount', v_amount, 'profit', v_profit);
+end;
+$$;
+
+drop function if exists public.update_sale_details(uuid, text, text, date, text, boolean, text, boolean);
+
+create or replace function public.update_sale_details(
+  p_movement_id uuid,
+  p_seller text default null,
+  p_payment text default null,
+  p_date date default null,
+  p_status text default null,
+  p_paid boolean default null,
+  p_customer text default null,
+  p_clear_customer boolean default false
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_sale public.movements%rowtype;
+begin
+  if p_status is not null and p_status not in ('pendiente', 'entregado', 'cancelado') then
+    raise exception 'Estado inválido';
+  end if;
+
+  update public.movements
+  set seller = coalesce(nullif(trim(coalesce(p_seller, '')), ''), seller),
+      payment = coalesce(nullif(trim(coalesce(p_payment, '')), ''), payment),
+      date = coalesce(p_date, date),
+      status = coalesce(p_status, status),
+      paid = coalesce(p_paid, paid),
+      customer = case
+        when p_clear_customer then null
+        when p_customer is not null then nullif(trim(p_customer), '')
+        else customer
+      end
+  where id = p_movement_id
+    and type = 'venta'
+  returning * into v_sale;
+
+  if not found then
+    raise exception 'Venta no encontrada';
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'id', v_sale.id,
+    'customer', v_sale.customer,
+    'status', v_sale.status,
+    'paid', v_sale.paid
+  );
 end;
 $$;
 
@@ -275,14 +356,14 @@ from (
 ) as seed(name, brand, location, cost, price, wholesale_price, stock, min_stock, sold)
 where not exists (select 1 from public.products);
 
-insert into public.movements (type, status, title, detail, amount, profit, date, seller, payment, paid)
+insert into public.movements (type, status, title, detail, amount, profit, date, seller, payment, paid, location)
 select *
 from (
   values
-    ('venta', 'entregado', 'Venta registrada', '3 Baldo 1kg por Mercado Pago', 51000, 15000, current_date, 'Julian', 'Mercado Pago', true),
-    ('compra', null, 'Ingreso de mercadería', '20 Playadito 1kg al stock', 144000, 0, current_date - 1, null, null, true),
-    ('venta', 'entregado', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Santiago', 'Efectivo', false)
-) as seed(type, status, title, detail, amount, profit, date, seller, payment, paid)
+    ('venta', 'entregado', 'Venta registrada', '3 Baldo 1kg por Mercado Pago', 51000, 15000, current_date, 'Julian', 'Mercado Pago', true, 'Buenos Aires'),
+    ('compra', null, 'Ingreso de mercadería', '20 Playadito 1kg al stock', 144000, 0, current_date - 1, null, null, true, 'Buenos Aires'),
+    ('venta', 'entregado', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Santiago', 'Efectivo', false, 'Villa Maria')
+) as seed(type, status, title, detail, amount, profit, date, seller, payment, paid, location)
 where not exists (select 1 from public.movements);
 
 notify pgrst, 'reload schema';

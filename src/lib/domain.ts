@@ -30,6 +30,7 @@ export type Movement = {
   payment?: string;
   customer?: string;
   unitCost?: number;
+  location?: string;
 };
 
 export type PurchaseInput = {
@@ -90,6 +91,7 @@ export const seedMovements: Movement[] = [
     customer: "Cliente mostrador",
     status: "entregado",
     paymentStatus: "pagado",
+    location: "Buenos Aires",
   },
   {
     id: "m2",
@@ -101,6 +103,7 @@ export const seedMovements: Movement[] = [
     amount: 144000,
     profit: 0,
     date: "2026-05-17",
+    location: "Buenos Aires",
   },
   {
     id: "m3",
@@ -117,5 +120,6 @@ export const seedMovements: Movement[] = [
     customer: "Martina",
     status: "entregado",
     paymentStatus: "no_pagado",
+    location: "Villa Maria",
   },
 ];

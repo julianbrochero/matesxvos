@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  background: #ffffff;
+  background: #f6f5f1;
 }
 
 * {
@@ -17,9 +17,11 @@ html {
 
 body {
   min-height: 100vh;
-  background: #f8fafc;
+  background: #f6f5f1;
   color: #111111;
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {

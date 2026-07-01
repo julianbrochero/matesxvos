@@ -354,6 +354,16 @@ function DashboardView({ setView }: { setView: (view: View) => void }) {
       .filter((product) => productLocation(product) === location)
       .reduce((sum, product) => sum + product.stock, 0),
   }));
+  const salesByLocation = LOCATIONS.map((location) => {
+    const locationSales = movements.filter(
+      (movement) => movement.type === "venta" && movementLocation(movement, products) === location,
+    );
+    return {
+      location,
+      sales: locationSales.reduce((sum, movement) => sum + movement.amount, 0),
+      profit: locationSales.reduce((sum, movement) => sum + movement.profit, 0),
+    };
+  });
   const lowProducts = products.filter((product) => product.stock <= LOW_STOCK_LIMIT);
   const recent = movements.slice(0, 6);
 
@@ -376,6 +386,20 @@ function DashboardView({ setView }: { setView: (view: View) => void }) {
         <SummaryCard label="Villa Maria" value={`${stockByLocation[1]?.stock ?? 0} u.`} />
         <SummaryCard label="Ventas" value={currency(metrics.sales)} />
       </div>
+
+      <Panel title="Ventas por ciudad" subtitle="Vendido y ganancia, separados por sucursal">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {salesByLocation.map((entry) => (
+            <div key={entry.location} className={cn("rounded-xl border p-4", stockLocationCardClass(entry.location))}>
+              <div className="flex items-center justify-between gap-2">
+                <LocationBadge location={entry.location} />
+              </div>
+              <p className="mt-3 text-2xl font-semibold tracking-tight">{currency(entry.sales)}</p>
+              <p className="mt-1 text-sm font-medium text-emerald-700">+{currency(entry.profit)} ganancia</p>
+            </div>
+          ))}
+        </div>
+      </Panel>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
         <Panel title="Stock bajo" subtitle="Productos para revisar">
@@ -2387,6 +2411,7 @@ function movementMatchesLocation(movement: Movement, products: Product[], filter
 }
 
 function movementLocation(movement: Movement, products: Product[]) {
+  if (movement.location) return normalizeLocation(movement.location);
   const product = products.find((item) => item.id === movement.productId);
   return product ? productLocation(product) : LOCATIONS[0];
 }
