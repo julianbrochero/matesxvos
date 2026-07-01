@@ -17,16 +17,16 @@ export function Modal({ open, title, subtitle, onClose, children }: ModalProps) 
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-3 sm:place-items-center sm:p-6"
+          className="fixed inset-0 z-50 grid place-items-end bg-slate-950/40 p-3 backdrop-blur-sm sm:place-items-center sm:p-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-xl border border-slate-200 bg-white p-5 shadow-xl sm:p-6"
-            initial={{ y: 18, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 12, opacity: 0 }}
+            className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-3xl border border-slate-200/70 bg-white p-5 shadow-premium sm:p-7"
+            initial={{ y: 18, opacity: 0, scale: 0.98 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 12, opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.16 }}
           >
             <div className="mb-5 flex items-start justify-between gap-4">

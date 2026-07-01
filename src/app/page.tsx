@@ -106,7 +106,7 @@ export default function Home() {
     return (
       <>
         <AlertToaster />
-        <div className="min-h-screen bg-slate-50" />
+        <div className="min-h-screen bg-canvas" />
       </>
     );
   }
@@ -123,7 +123,7 @@ export default function Home() {
   return (
     <>
       <AlertToaster />
-      <main className="min-h-screen bg-slate-50 text-slate-950">
+      <main className="min-h-screen bg-canvas text-slate-950">
         <AppShell view={view} setView={setView} onLogout={() => setSignedIn(false)}>
           {view === "dashboard" && <DashboardView setView={setView} />}
           {view === "stock" && <StockView setView={setView} />}
@@ -168,9 +168,12 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10">
-      <section className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold tracking-tight">Mates x Vos</h1>
+    <main className="grid min-h-screen place-items-center bg-canvas px-4 py-10">
+      <section className="w-full max-w-md rounded-3xl border border-slate-200/70 bg-white p-7 shadow-premium">
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-950 text-base font-semibold text-white">
+          M
+        </div>
+        <h1 className="mt-4 text-2xl font-semibold tracking-tight">Mates x Vos</h1>
         <p className="mt-1 text-sm text-slate-500">Stock, ventas y precios.</p>
         <form onSubmit={submit} className="mt-6 grid gap-4">
           <Input
@@ -226,41 +229,44 @@ function AppShell({
   }
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
-      <aside className="hidden w-64 shrink-0 border-r border-teal-950/20 bg-gradient-to-b from-teal-950 via-cyan-950 to-slate-950 p-4 text-white shadow-2xl lg:block">
-        <Brand inverse />
-        <nav className="mt-6 grid gap-2">
-          {navItems.map((item) => (
-            <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
-          ))}
-        </nav>
-        <Button
-          className="mt-6 w-full justify-start border border-white/10 bg-white/5 text-teal-50 hover:bg-white/10 hover:text-white"
-          variant="ghost"
-          onClick={() => void logout()}
-        >
-          <LogOut className="h-4 w-4" />
-          Salir
-        </Button>
+    <div className="mx-auto flex min-h-screen w-full max-w-[1440px] bg-canvas">
+      <aside className="hidden w-[264px] shrink-0 p-3 lg:block">
+        <div className="sticky top-3 flex h-[calc(100vh-1.5rem)] flex-col rounded-3xl border border-slate-200/70 bg-white/80 p-4 shadow-rail backdrop-blur-xl">
+          <Brand />
+          <nav className="mt-6 grid gap-1">
+            {navItems.map((item) => (
+              <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
+            ))}
+          </nav>
+          <div className="mt-auto pt-4">
+            <Button
+              className="w-full justify-start text-slate-500 hover:text-slate-950"
+              variant="ghost"
+              onClick={() => void logout()}
+            >
+              <LogOut className="h-4 w-4" />
+              Salir
+            </Button>
+          </div>
+        </div>
       </aside>
 
       {menuOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <button className="absolute inset-0 bg-black/20" type="button" aria-label="Cerrar menu" onClick={() => setMenuOpen(false)} />
-          <aside className="relative h-full w-[82vw] max-w-xs bg-gradient-to-b from-teal-950 via-cyan-950 to-slate-950 p-4 text-white shadow-xl">
+          <button className="absolute inset-0 bg-slate-950/30 backdrop-blur-sm" type="button" aria-label="Cerrar menu" onClick={() => setMenuOpen(false)} />
+          <aside className="relative flex h-full w-[82vw] max-w-xs flex-col bg-white p-4 shadow-2xl">
             <div className="flex items-center justify-between gap-3">
-              <Brand inverse />
+              <Brand />
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-teal-50 hover:bg-white/10 hover:text-white"
                 onClick={() => setMenuOpen(false)}
                 aria-label="Cerrar menu"
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <nav className="mt-6 grid gap-2">
+            <nav className="mt-6 grid gap-1">
               {navItems.map((item) => (
                 <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
               ))}
@@ -270,7 +276,7 @@ function AppShell({
       ) : null}
 
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <header className="sticky top-0 z-40 bg-canvas/80 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex items-center gap-3">
               <Button className="lg:hidden" variant="ghost" size="icon" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
@@ -281,7 +287,7 @@ function AppShell({
               </div>
               <p className="hidden text-sm text-slate-500 lg:block">Sistema de stock y ventas</p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => void logout()}>
+            <Button className="lg:hidden" variant="ghost" size="sm" onClick={() => void logout()}>
               <LogOut className="h-4 w-4" />
               Salir
             </Button>
@@ -296,23 +302,20 @@ function AppShell({
   );
 }
 
-function Brand({ compact, inverse }: { compact?: boolean; inverse?: boolean }) {
+function Brand({ compact }: { compact?: boolean }) {
   return (
-    <div className="min-w-0">
-      <p
-        className={cn(
-          "truncate font-semibold tracking-tight",
-          compact ? "text-base" : "text-lg",
-          inverse ? "text-white" : "text-slate-950",
-        )}
-      >
-        Mates x Vos
-      </p>
+    <div className="flex min-w-0 items-center gap-2.5">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">
+        M
+      </div>
       {!compact ? (
-        <p className={cn("text-xs", inverse ? "text-teal-100/80" : "text-slate-500")}>
-          Inventario por sucursal
-        </p>
-      ) : null}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold tracking-tight text-slate-950">Mates x Vos</p>
+          <p className="truncate text-xs text-slate-500">Inventario por sucursal</p>
+        </div>
+      ) : (
+        <p className="truncate text-base font-semibold tracking-tight text-slate-950">Mates x Vos</p>
+      )}
     </div>
   );
 }
@@ -332,10 +335,10 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition",
+        "flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all",
         active
-          ? "bg-white text-teal-950 shadow-lg shadow-black/20"
-          : "border border-transparent text-teal-50/80 hover:border-white/10 hover:bg-white/10 hover:text-white",
+          ? "bg-slate-950 text-white shadow-sm"
+          : "text-slate-500 hover:bg-slate-950/5 hover:text-slate-950",
       )}
     >
       <Icon className="h-4 w-4" />
@@ -482,7 +485,7 @@ function StockView({ setView }: { setView: (view: View) => void }) {
 
       <StockLocationReference />
 
-      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
+      <div className="hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-soft md:block">
         <table className="w-full border-collapse text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
@@ -864,7 +867,7 @@ function SalesView() {
         </div>
       </Panel>
 
-      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
+      <div className="hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-soft md:block">
         <table className="w-full border-collapse text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
@@ -1669,7 +1672,7 @@ function PageHeader({ title, description, action }: { title: string; description
 
 function Panel({ title, subtitle, children }: { title?: string; subtitle?: string; children?: ReactNode }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-soft sm:p-5">
       {title ? (
         <div className="mb-4">
           <h2 className="font-semibold tracking-tight">{title}</h2>
@@ -1683,7 +1686,7 @@ function Panel({ title, subtitle, children }: { title?: string; subtitle?: strin
 
 function SummaryCard({ label, value, tone }: { label: string; value: string; tone?: "ok" | "warning" }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-soft">
       <p className="text-sm text-slate-500">{label}</p>
       <p className={cn("mt-2 text-2xl font-semibold tracking-tight", tone === "warning" && "text-amber-700", tone === "ok" && "text-emerald-700")}>{value}</p>
     </div>
@@ -1692,7 +1695,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: string; ton
 
 function SummaryPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+    <div className="rounded-xl border border-slate-200/70 bg-white px-3 py-2">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="font-medium">{value}</p>
     </div>
