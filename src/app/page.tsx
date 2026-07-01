@@ -3,6 +3,7 @@
 import { FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   Boxes,
@@ -220,15 +221,15 @@ function AppShell({
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
-      <aside className="hidden w-64 shrink-0 border-r border-teal-950/20 bg-gradient-to-b from-teal-950 via-cyan-950 to-slate-950 p-4 text-white shadow-2xl lg:block">
+      <aside className="hidden w-64 shrink-0 border-r border-white/5 bg-slate-950 p-4 text-white lg:block">
         <Brand inverse />
-        <nav className="mt-6 grid gap-2">
+        <nav className="mt-6 grid gap-1">
           {navItems.map((item) => (
             <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
           ))}
         </nav>
         <Button
-          className="mt-6 w-full justify-start border border-white/10 bg-white/5 text-teal-50 hover:bg-white/10 hover:text-white"
+          className="mt-6 w-full justify-start text-white/55 hover:bg-white/5 hover:text-white"
           variant="ghost"
           onClick={() => void logout()}
         >
@@ -240,20 +241,20 @@ function AppShell({
       {menuOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button className="absolute inset-0 bg-black/20" type="button" aria-label="Cerrar menu" onClick={() => setMenuOpen(false)} />
-          <aside className="relative h-full w-[82vw] max-w-xs bg-gradient-to-b from-teal-950 via-cyan-950 to-slate-950 p-4 text-white shadow-xl">
+          <aside className="relative h-full w-[82vw] max-w-xs bg-slate-950 p-4 text-white shadow-xl">
             <div className="flex items-center justify-between gap-3">
               <Brand inverse />
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-teal-50 hover:bg-white/10 hover:text-white"
+                className="text-white/70 hover:bg-white/10 hover:text-white"
                 onClick={() => setMenuOpen(false)}
                 aria-label="Cerrar menu"
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <nav className="mt-6 grid gap-2">
+            <nav className="mt-6 grid gap-1">
               {navItems.map((item) => (
                 <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
               ))}
@@ -263,7 +264,7 @@ function AppShell({
       ) : null}
 
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex items-center gap-3">
               <Button className="lg:hidden" variant="ghost" size="icon" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
@@ -285,7 +286,17 @@ function AppShell({
         </header>
         <div className="grid gap-4 px-4 py-5 sm:px-6 lg:py-6">
           {!loading && storeError ? <ConnectionMessage text={storeError} /> : null}
-          {children}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={view}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </div>
@@ -301,15 +312,15 @@ function LocationSwitcher() {
   ];
 
   return (
-    <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+    <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           onClick={() => setLocationFilter(option.value)}
           className={cn(
-            "rounded-md px-2.5 py-1.5 text-xs font-medium transition sm:text-sm",
-            locationFilter === option.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+            "rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 sm:text-sm",
+            locationFilter === option.value ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
           )}
         >
           {option.label}
@@ -332,7 +343,7 @@ function Brand({ compact, inverse }: { compact?: boolean; inverse?: boolean }) {
         Mates x Vos
       </p>
       {!compact ? (
-        <p className={cn("text-xs", inverse ? "text-teal-100/80" : "text-slate-500")}>
+        <p className={cn("text-xs", inverse ? "text-white/45" : "text-slate-500")}>
           Inventario por sucursal
         </p>
       ) : null}
@@ -355,10 +366,8 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition",
-        active
-          ? "bg-white text-teal-950 shadow-lg shadow-black/20"
-          : "border border-transparent text-teal-50/80 hover:border-white/10 hover:bg-white/10 hover:text-white",
+        "flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-all duration-150",
+        active ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/5 hover:text-white/90",
       )}
     >
       <Icon className="h-4 w-4" />
@@ -471,12 +480,12 @@ function StockView() {
       <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
         <PageHeader title="Stock" description="Productos, precios, ubicacion y carga de mercaderia." />
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-2 rounded-lg bg-slate-100 p-1">
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
             <button
               type="button"
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition",
-                activeTab === "inventario" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+                activeTab === "inventario" ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
               )}
               onClick={() => setActiveTab("inventario")}
             >
@@ -485,8 +494,8 @@ function StockView() {
             <button
               type="button"
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition",
-                activeTab === "carga" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+                activeTab === "carga" ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
               )}
               onClick={() => setActiveTab("carga")}
             >
@@ -519,9 +528,9 @@ function StockView() {
 
       <StockLocationReference />
 
-      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
+      <div className="hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-card md:block">
         <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="bg-slate-50/80 text-xs font-medium uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Foto</th>
               <th className="px-4 py-3">Producto</th>
@@ -536,7 +545,7 @@ function StockView() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((product) => (
-              <tr key={product.id} className={stockLocationRowClass(productLocation(product))}>
+              <tr key={product.id} className={cn("transition-colors duration-150", stockLocationRowClass(productLocation(product)))}>
                 <td className="px-4 py-3"><ProductThumb product={product} /></td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -906,9 +915,9 @@ function SalesView() {
         </div>
       </Panel>
 
-      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
+      <div className="hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-card md:block">
         <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="bg-slate-50/80 text-xs font-medium uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Venta</th>
               <th className="px-4 py-3">Fecha</th>
@@ -924,7 +933,7 @@ function SalesView() {
               <tr
                 key={sale.id}
                 className={cn(
-                  "transition",
+                  "transition-colors duration-150",
                   salePaymentStatus(sale) === "pagado" ? "bg-emerald-50/70 hover:bg-emerald-50" : "hover:bg-slate-50",
                 )}
               >
@@ -1284,12 +1293,12 @@ function ListasView() {
     <section className="grid gap-5">
       <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
         <PageHeader title="Listas" description="Precios minoristas, catálogo mayorista y presupuestador." />
-        <div className="flex gap-2 rounded-lg bg-slate-100 p-1 self-start sm:self-auto">
+        <div className="flex gap-1 rounded-xl bg-slate-100 p-1 self-start sm:self-auto">
           <button
             type="button"
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition",
-              activeTab === "minorista" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+              "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+              activeTab === "minorista" ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
             )}
             onClick={() => setActiveTab("minorista")}
           >
@@ -1298,8 +1307,8 @@ function ListasView() {
           <button
             type="button"
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition",
-              activeTab === "mayorista" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+              "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+              activeTab === "mayorista" ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
             )}
             onClick={() => setActiveTab("mayorista")}
           >
@@ -1308,8 +1317,8 @@ function ListasView() {
           <button
             type="button"
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition",
-              activeTab === "presupuestador" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+              "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+              activeTab === "presupuestador" ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
             )}
             onClick={() => setActiveTab("presupuestador")}
           >
@@ -1716,7 +1725,7 @@ function PageHeader({ title, description, action }: { title: string; description
   return (
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-[26px] font-semibold tracking-tight text-slate-950">{title}</h1>
         {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
       </div>
       {action ? <div className="flex shrink-0">{action}</div> : null}
@@ -1726,10 +1735,10 @@ function PageHeader({ title, description, action }: { title: string; description
 
 function Panel({ title, subtitle, children }: { title?: string; subtitle?: string; children?: ReactNode }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-card sm:p-5">
       {title ? (
         <div className="mb-4">
-          <h2 className="font-semibold tracking-tight">{title}</h2>
+          <h2 className="font-semibold tracking-tight text-slate-950">{title}</h2>
           {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
         </div>
       ) : null}
@@ -1740,7 +1749,7 @@ function Panel({ title, subtitle, children }: { title?: string; subtitle?: strin
 
 function SummaryCard({ label, value, tone }: { label: string; value: string; tone?: "ok" | "warning" }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-card transition-shadow duration-200 hover:shadow-card-hover">
       <p className="text-sm text-slate-500">{label}</p>
       <p className={cn("mt-2 text-2xl font-semibold tracking-tight", tone === "warning" && "text-amber-700", tone === "ok" && "text-emerald-700")}>{value}</p>
     </div>
@@ -1749,7 +1758,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: string; ton
 
 function SummaryPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+    <div className="rounded-xl border border-slate-200/70 bg-white px-3 py-2 shadow-card">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="font-medium">{value}</p>
     </div>
@@ -1759,8 +1768,13 @@ function SummaryPill({ label, value }: { label: string; value: string }) {
 function SearchInput({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
   return (
     <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-      <Input className="pl-9" placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <Input
+        className="border-transparent bg-slate-50 pl-10 focus:border-teal-500/60 focus:bg-white"
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
 }

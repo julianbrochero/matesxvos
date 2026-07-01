@@ -12,7 +12,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label ? <span>{label}</span> : null}
         <input
           className={cn(
-            "h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100",
+            "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition-shadow duration-150 placeholder:text-slate-400 focus:border-teal-500/60 focus:ring-4 focus:ring-teal-500/10",
             className,
           )}
           ref={ref}
