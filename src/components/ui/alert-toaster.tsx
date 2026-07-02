@@ -38,7 +38,7 @@ export function AlertToaster() {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 top-3 z-[70] mx-auto flex w-full max-w-md flex-col gap-2 px-3 sm:left-auto sm:right-4 sm:mx-0 sm:max-w-sm sm:px-0"
+      className="pointer-events-none fixed inset-x-0 top-[7.5rem] z-[70] mx-auto flex w-full max-w-md flex-col gap-2 px-3 lg:left-auto lg:right-4 lg:top-3 lg:mx-0 lg:max-w-sm lg:px-0"
       aria-live="polite"
       aria-relevant="additions text"
     >

@@ -13,14 +13,12 @@ import {
   Image as ImageIcon,
   LayoutDashboard,
   LogOut,
-  Menu,
   MoreVertical,
   PackagePlus,
   Plus,
   Search,
   ShoppingBag,
   Trash2,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -197,7 +195,6 @@ function AppShell({
   onLogout: () => void;
   children: ReactNode;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const loading = useStockStore((state) => state.loading);
   const storeError = useStockStore((state) => state.error);
   const notify = useAlertStore((state) => state.notify);
@@ -214,18 +211,13 @@ function AppShell({
     onLogout();
   }
 
-  function navigate(nextView: View) {
-    setView(nextView);
-    setMenuOpen(false);
-  }
-
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
       <aside className="hidden w-64 shrink-0 border-r border-white/5 bg-slate-950 p-4 text-white lg:block">
         <Brand inverse />
         <nav className="mt-6 grid gap-1">
           {navItems.map((item) => (
-            <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
+            <NavButton key={item.id} item={item} active={view === item.id} onClick={() => setView(item.id)} />
           ))}
         </nav>
         <Button
@@ -238,53 +230,33 @@ function AppShell({
         </Button>
       </aside>
 
-      {menuOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button className="absolute inset-0 bg-black/20" type="button" aria-label="Cerrar menu" onClick={() => setMenuOpen(false)} />
-          <aside className="relative h-full w-[82vw] max-w-xs bg-slate-950 p-4 text-white shadow-xl">
-            <div className="flex items-center justify-between gap-3">
-              <Brand inverse />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-white/70 hover:bg-white/10 hover:text-white"
-                onClick={() => setMenuOpen(false)}
-                aria-label="Cerrar menu"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <nav className="mt-6 grid gap-1">
-              {navItems.map((item) => (
-                <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
-              ))}
-            </nav>
-          </aside>
-        </div>
-      ) : null}
-
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex items-center gap-3">
-              <Button className="lg:hidden" variant="ghost" size="icon" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
-                <Menu className="h-5 w-5" />
-              </Button>
               <div className="lg:hidden">
                 <Brand compact />
               </div>
               <p className="hidden text-sm text-slate-500 lg:block">Sistema de stock y ventas</p>
             </div>
             <div className="flex items-center gap-3">
-              <LocationSwitcher />
-              <Button variant="ghost" size="sm" onClick={() => void logout()}>
+              <div className="hidden lg:block">
+                <LocationSwitcher />
+              </div>
+              <Button variant="ghost" size="sm" className="hidden lg:inline-flex" onClick={() => void logout()}>
                 <LogOut className="h-4 w-4" />
                 Salir
               </Button>
+              <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => void logout()} aria-label="Salir">
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
+          <div className="border-t border-slate-200/70 px-4 py-2 lg:hidden">
+            <LocationSwitcher fullWidth />
+          </div>
         </header>
-        <div className="grid gap-4 px-4 py-5 sm:px-6 lg:py-6">
+        <div className="grid gap-4 px-4 pb-28 pt-5 sm:px-6 lg:pb-6 lg:pt-6">
           {!loading && storeError ? <ConnectionMessage text={storeError} /> : null}
           <AnimatePresence mode="wait">
             <motion.div
@@ -299,11 +271,13 @@ function AppShell({
           </AnimatePresence>
         </div>
       </div>
+
+      <MobileTabBar view={view} setView={setView} />
     </div>
   );
 }
 
-function LocationSwitcher() {
+function LocationSwitcher({ fullWidth }: { fullWidth?: boolean }) {
   const locationFilter = useLocationFilterStore((state) => state.locationFilter);
   const setLocationFilter = useLocationFilterStore((state) => state.setLocationFilter);
   const options: { value: LocationFilter; label: string }[] = [
@@ -312,14 +286,15 @@ function LocationSwitcher() {
   ];
 
   return (
-    <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+    <div className={cn("flex gap-1 rounded-xl bg-slate-100 p-1", fullWidth && "w-full")}>
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           onClick={() => setLocationFilter(option.value)}
           className={cn(
-            "rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 sm:text-sm",
+            "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 sm:text-sm",
+            fullWidth && "flex-1",
             locationFilter === option.value ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
           )}
         >
@@ -376,6 +351,49 @@ function NavButton({
   );
 }
 
+function MobileTabBar({ view, setView }: { view: View; setView: (view: View) => void }) {
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 lg:hidden"
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)", paddingTop: "0.5rem" }}
+    >
+      <div className="flex items-center gap-1 rounded-full border border-slate-200/70 bg-white/85 p-1.5 shadow-premium backdrop-blur-xl">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const active = view === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setView(item.id)}
+              aria-label={item.label}
+              aria-current={active ? "page" : undefined}
+              className="relative flex h-12 min-w-[68px] flex-col items-center justify-center gap-0.5 rounded-full px-3"
+            >
+              {active ? (
+                <motion.span
+                  layoutId="mobile-tab-bubble"
+                  className="absolute inset-0 rounded-full bg-slate-950"
+                  transition={{ type: "spring", stiffness: 500, damping: 34 }}
+                />
+              ) : null}
+              <Icon className={cn("relative z-10 h-5 w-5 transition-colors duration-150", active ? "text-white" : "text-slate-500")} />
+              <span
+                className={cn(
+                  "relative z-10 text-[11px] font-medium transition-colors duration-150",
+                  active ? "text-white" : "text-slate-500",
+                )}
+              >
+                {item.short}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 function DashboardView({ setView }: { setView: (view: View) => void }) {
   const products = useStockStore((state) => state.products);
   const movements = useStockStore((state) => state.movements);
@@ -411,7 +429,7 @@ function DashboardView({ setView }: { setView: (view: View) => void }) {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <SummaryCard label="Productos" value={String(filteredProducts.length)} />
         {locationFilter === "todos" ? (
           <>
@@ -995,11 +1013,6 @@ function SalesView() {
         ))}
         {!visibleSales.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
       </div>
-
-      <Button className="fixed bottom-6 right-4 z-30 rounded-full shadow-lg md:hidden" onClick={() => setModalOpen(true)} disabled={!products.length}>
-        <Plus className="h-5 w-5" />
-        Venta
-      </Button>
 
       <Modal
         open={modalOpen}
