@@ -175,25 +175,29 @@ function localRegisterSale(
 ) {
   if (!items.length) return null;
 
-  const products = items.map((item) => state.products.find((entry) => entry.id === item.productId));
-  if (products.some((product, index) => !product || product.stock < items[index].quantity)) return null;
+  const products = items.map((item) => (item.productId ? state.products.find((entry) => entry.id === item.productId) : undefined));
+  const stockOk = items.every((item, index) => !item.productId || (products[index] && products[index]!.stock >= item.quantity));
+  if (!stockOk) return null;
 
   const groupId = items.length > 1 ? id("g") : undefined;
   let nextProducts = state.products;
   const newMovements: Movement[] = [];
 
   items.forEach((item, index) => {
-    const product = products[index]!;
-    const salePrice = item.unitPrice > 0 ? item.unitPrice : product.price;
-    const saleCost = item.unitCost !== undefined && item.unitCost > 0 ? item.unitCost : product.cost;
+    const product = products[index];
+    const name = product?.name ?? item.customName ?? "Producto";
+    const salePrice = item.unitPrice > 0 ? item.unitPrice : product?.price ?? 0;
+    const saleCost = item.unitCost !== undefined && item.unitCost > 0 ? item.unitCost : product?.cost ?? 0;
     const amount = salePrice * item.quantity;
     const profit = (salePrice - saleCost) * item.quantity;
 
-    nextProducts = nextProducts.map((entry) =>
-      entry.id === item.productId
-        ? { ...entry, stock: entry.stock - item.quantity, sold: entry.sold + item.quantity }
-        : entry,
-    );
+    if (product) {
+      nextProducts = nextProducts.map((entry) =>
+        entry.id === item.productId
+          ? { ...entry, stock: entry.stock - item.quantity, sold: entry.sold + item.quantity }
+          : entry,
+      );
+    }
 
     newMovements.push({
       id: id("m"),
@@ -201,7 +205,7 @@ function localRegisterSale(
       productId: item.productId,
       quantity: item.quantity,
       title: "Venta registrada",
-      detail: `${item.quantity} ${product.name} por ${payment}`,
+      detail: `${item.quantity} ${name} por ${payment}`,
       amount,
       profit,
       unitCost: saleCost,

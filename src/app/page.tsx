@@ -40,7 +40,8 @@ type SalePaymentStatus = "pagado" | "no_pagado";
 type SalePaymentFilter = "todos" | SalePaymentStatus;
 type SaleLineItem = {
   id: string;
-  productId: string;
+  productId?: string;
+  customName?: string;
   quantity: number;
   unitPrice: number;
   unitCost: number;
@@ -746,6 +747,7 @@ function SalesView() {
   const locationFilter = useLocationFilterStore((state) => state.locationFilter);
   const [saleLocation, setSaleLocation] = useState<LocationName>(locationFilter === "todos" ? LOCATIONS[0] : locationFilter);
   const [productId, setProductId] = useState(products[0]?.id ?? "");
+  const [customName, setCustomName] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [salePrice, setSalePrice] = useState("");
   const [seller, setSeller] = useState<(typeof VENDORS)[number]>("Julian");
@@ -789,7 +791,7 @@ function SalesView() {
   }, [locationFilter]);
 
   useEffect(() => {
-    if (saleProducts.some((product) => product.id === productId)) return;
+    if (productId === "custom" || saleProducts.some((product) => product.id === productId)) return;
     setProductId(saleProducts[0]?.id ?? "");
   }, [productId, saleProducts]);
 
@@ -801,13 +803,16 @@ function SalesView() {
     setCart([]);
     setQuantity("1");
     setSalePrice(selectedPrice ? String(selectedPrice) : "");
+    setCustomName("");
     setCustomer("");
     setStatus("entregado");
     setPaymentStatus("pagado");
   }
 
   function addLineToCart() {
-    if (!selected) return;
+    const isCustom = productId === "custom";
+    if (!isCustom && !selected) return;
+
     const parsedPrice = parseOptionalPrice(salePrice);
     if (!parsedPrice) {
       notify({ type: "warning", title: "Ingresá un precio de venta válido" });
@@ -817,21 +822,27 @@ function SalesView() {
       notify({ type: "warning", title: "Ingresá una cantidad válida" });
       return;
     }
+    if (isCustom && !customName.trim()) {
+      notify({ type: "warning", title: "Escribí el nombre del producto personalizado" });
+      return;
+    }
 
     setCart((items) => [
       ...items,
       {
         id: crypto.randomUUID(),
-        productId,
+        productId: isCustom ? undefined : productId,
+        customName: isCustom ? customName.trim() : undefined,
         quantity: quantityValue,
         unitPrice: parsedPrice,
-        unitCost: selected.cost,
+        unitCost: isCustom ? 0 : selected!.cost,
         unitPriceInput: salePrice,
         lineTotalInput: String(Math.round(parsedPrice * quantityValue)),
-        unitCostInput: String(selected.cost),
+        unitCostInput: isCustom ? "" : String(selected!.cost),
       },
     ]);
     setQuantity("1");
+    if (isCustom) setCustomName("");
   }
 
   function removeLineFromCart(lineId: string) {
@@ -894,14 +905,15 @@ function SalesView() {
 
     const items: SaleLineInput[] = [];
     for (const item of cart) {
-      const product = products.find((entry) => entry.id === item.productId);
+      const product = item.productId ? products.find((entry) => entry.id === item.productId) : undefined;
+      const displayName = product?.name ?? item.customName;
       const unitPrice = parseOptionalPrice(item.unitPriceInput);
       const unitCost = parseOptionalPrice(item.unitCostInput);
       if (!unitPrice || !unitCost) {
-        notify({ type: "warning", title: "Revisá precios y costos", message: product?.name });
+        notify({ type: "warning", title: "Revisá precios y costos", message: displayName });
         return;
       }
-      items.push({ productId: item.productId, quantity: item.quantity, unitPrice, unitCost });
+      items.push({ productId: item.productId, customName: item.customName, quantity: item.quantity, unitPrice, unitCost });
     }
 
     submittingRef.current = true;
@@ -922,7 +934,7 @@ function SalesView() {
       }
 
       const productNames = cart
-        .map((item) => products.find((entry) => entry.id === item.productId)?.name)
+        .map((item) => (item.productId ? products.find((entry) => entry.id === item.productId)?.name : item.customName))
         .filter(Boolean)
         .join(", ");
       notify({
@@ -1106,28 +1118,43 @@ function SalesView() {
             {LOCATIONS.map((location) => <option key={location} value={location}>{location}</option>)}
           </Select>
           <Select label="Producto" value={productId} required onChange={(event) => setProductId(event.target.value)}>
+            <option value="custom">— Producto personalizado —</option>
             {saleProducts.map((product) => <option key={product.id} value={product.id}>{product.name} - {product.stock} u.</option>)}
           </Select>
+          {productId === "custom" ? (
+            <Input
+              label="Nombre del producto"
+              placeholder="Ej. Combo especial"
+              value={customName}
+              onChange={(event) => setCustomName(event.target.value)}
+            />
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-3">
             <Input label="Cantidad" required type="number" min={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
             <Input label="Precio venta" required type="number" min={1} step="0.01" value={salePrice} onChange={(event) => setSalePrice(event.target.value)} />
             <Input label="Fecha" required type="date" value={date} onChange={(event) => setDate(event.target.value)} />
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-            <div className="flex justify-between gap-3">
-              <span className="text-slate-500">Disponible</span>
-              <span className="font-medium">{selected?.stock ?? 0} u.</span>
-            </div>
-            <div className="mt-1 flex justify-between gap-3">
-              <span className="text-slate-500">Precio lista</span>
-              <span className="font-medium">{currency(selected?.price ?? 0)}</span>
-            </div>
+            {productId === "custom" ? (
+              <p className="text-slate-500">Este producto es solo para esta venta: no se guarda en el catálogo de Stock.</p>
+            ) : (
+              <>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Disponible</span>
+                  <span className="font-medium">{selected?.stock ?? 0} u.</span>
+                </div>
+                <div className="mt-1 flex justify-between gap-3">
+                  <span className="text-slate-500">Precio lista</span>
+                  <span className="font-medium">{currency(selected?.price ?? 0)}</span>
+                </div>
+              </>
+            )}
             <div className="mt-1 flex justify-between gap-3">
               <span className="text-slate-500">Subtotal</span>
               <span className="font-medium">{currency(lineTotal)}</span>
             </div>
           </div>
-          <Button type="button" variant="secondary" onClick={addLineToCart} disabled={!saleProducts.length}>
+          <Button type="button" variant="secondary" onClick={addLineToCart} disabled={productId !== "custom" && !saleProducts.length}>
             <Plus className="h-4 w-4" />
             Agregar producto
           </Button>
@@ -1135,7 +1162,7 @@ function SalesView() {
             <div className="grid gap-2 rounded-lg border border-slate-200 p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Productos en la venta</p>
               {cart.map((item) => {
-                const product = products.find((entry) => entry.id === item.productId);
+                const product = item.productId ? products.find((entry) => entry.id === item.productId) : undefined;
                 const unitPrice = parseOptionalPrice(item.unitPriceInput) ?? item.unitPrice;
                 const unitCost = parseOptionalPrice(item.unitCostInput) ?? item.unitCost;
                 const lineTotalAmount = item.quantity * unitPrice;
@@ -1144,7 +1171,14 @@ function SalesView() {
                   <div key={item.id} className="grid gap-2 rounded-md border border-slate-100 bg-slate-50 p-3 text-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-medium">{product?.name ?? "Producto"}</p>
+                        <p className="font-medium">
+                          {product?.name ?? item.customName ?? "Producto"}
+                          {!product ? (
+                            <span className="ml-2 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                              Personalizado
+                            </span>
+                          ) : null}
+                        </p>
                         <p className="text-slate-500">{item.quantity} u.</p>
                       </div>
                       <Button type="button" variant="ghost" size="icon" onClick={() => removeLineFromCart(item.id)} aria-label="Quitar producto">
@@ -2249,7 +2283,7 @@ function SaleEditModal({
               Para cambiar el precio de un producto puntual, eliminá esta venta y volvé a cargarla.
             </p>
           </div>
-        ) : singleMovement?.productId ? (
+        ) : singleMovement ? (
           <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="text-sm font-medium text-slate-700">{saleProductLabel(singleMovement, products)}</p>
             <div className="grid gap-4 sm:grid-cols-3">

@@ -3,12 +3,17 @@ import { z } from "zod";
 import { requireAdminRequest } from "@/lib/auth";
 import { isSupabaseConfigured, getSupabaseAdmin } from "@/lib/supabase/server";
 
-const saleLineSchema = z.object({
-  productId: z.string().min(1),
-  quantity: z.coerce.number().int().positive(),
-  unitPrice: z.coerce.number().positive(),
-  unitCost: z.coerce.number().positive().optional(),
-});
+const saleLineSchema = z
+  .object({
+    productId: z.string().min(1).optional(),
+    customName: z.string().trim().min(1).optional(),
+    quantity: z.coerce.number().int().positive(),
+    unitPrice: z.coerce.number().positive(),
+    unitCost: z.coerce.number().min(0).optional(),
+  })
+  .refine((value) => value.productId || value.customName, {
+    message: "Cada producto necesita un productId o un nombre personalizado",
+  });
 
 const saleSchema = z.object({
   items: z.array(saleLineSchema).min(1),
@@ -39,7 +44,8 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await getSupabaseAdmin().rpc("register_sale_batch", {
     p_items: parsed.data.items.map((item) => ({
-      productId: item.productId,
+      productId: item.productId ?? null,
+      customName: item.customName ?? null,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       unitCost: item.unitCost ?? null,
