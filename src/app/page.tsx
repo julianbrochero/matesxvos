@@ -13,12 +13,14 @@ import {
   Image as ImageIcon,
   LayoutDashboard,
   LogOut,
+  Menu,
   MoreVertical,
   PackagePlus,
   Plus,
   Search,
   ShoppingBag,
   Trash2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,12 +61,21 @@ const SALE_PAYMENT_STATUSES: { id: SalePaymentStatus; label: string }[] = [
   { id: "no_pagado", label: "No pagado" },
 ];
 
-const navItems: { id: View; label: string; short: string; icon: typeof Boxes }[] = [
-  { id: "dashboard", label: "Inicio", short: "Inicio", icon: LayoutDashboard },
-  { id: "ventas", label: "Ventas", short: "Ventas", icon: ShoppingBag },
-  { id: "stock", label: "Stock", short: "Stock", icon: Boxes },
-  { id: "listas", label: "Listas", short: "Listas", icon: Download },
+type NavAccent = "sky" | "emerald" | "amber" | "violet";
+
+const navItems: { id: View; label: string; short: string; icon: typeof Boxes; accent: NavAccent }[] = [
+  { id: "dashboard", label: "Inicio", short: "Inicio", icon: LayoutDashboard, accent: "sky" },
+  { id: "ventas", label: "Ventas", short: "Ventas", icon: ShoppingBag, accent: "emerald" },
+  { id: "stock", label: "Stock", short: "Stock", icon: Boxes, accent: "amber" },
+  { id: "listas", label: "Listas", short: "Listas", icon: Download, accent: "violet" },
 ];
+
+const NAV_ACCENTS: Record<NavAccent, { soft: string; text: string; darkBg: string; darkText: string }> = {
+  sky: { soft: "bg-sky-50", text: "text-sky-700", darkBg: "bg-sky-500/15", darkText: "text-sky-300" },
+  emerald: { soft: "bg-emerald-50", text: "text-emerald-700", darkBg: "bg-emerald-500/15", darkText: "text-emerald-300" },
+  amber: { soft: "bg-amber-50", text: "text-amber-700", darkBg: "bg-amber-400/20", darkText: "text-amber-300" },
+  violet: { soft: "bg-violet-50", text: "text-violet-700", darkBg: "bg-violet-500/15", darkText: "text-violet-300" },
+};
 
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
@@ -195,6 +206,7 @@ function AppShell({
   onLogout: () => void;
   children: ReactNode;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const loading = useStockStore((state) => state.loading);
   const storeError = useStockStore((state) => state.error);
   const notify = useAlertStore((state) => state.notify);
@@ -247,16 +259,13 @@ function AppShell({
                 <LogOut className="h-4 w-4" />
                 Salir
               </Button>
-              <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => void logout()} aria-label="Salir">
-                <LogOut className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
+                <Menu className="h-5 w-5" />
               </Button>
             </div>
           </div>
-          <div className="border-t border-slate-200/70 px-4 py-2 lg:hidden">
-            <LocationSwitcher fullWidth />
-          </div>
         </header>
-        <div className="grid gap-4 px-4 pb-28 pt-5 sm:px-6 lg:pb-6 lg:pt-6">
+        <div className="grid gap-4 px-4 py-5 sm:px-6 lg:py-6">
           {!loading && storeError ? <ConnectionMessage text={storeError} /> : null}
           <AnimatePresence mode="wait">
             <motion.div
@@ -272,7 +281,13 @@ function AppShell({
         </div>
       </div>
 
-      <MobileTabBar view={view} setView={setView} />
+      <MobileMenuSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        view={view}
+        setView={setView}
+        onLogout={() => void logout()}
+      />
     </div>
   );
 }
@@ -295,7 +310,7 @@ function LocationSwitcher({ fullWidth }: { fullWidth?: boolean }) {
           className={cn(
             "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 sm:text-sm",
             fullWidth && "flex-1",
-            locationFilter === option.value ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
+            locationFilter === option.value ? cn("bg-white shadow-card", locationFilterAccentText(option.value)) : "text-slate-600 hover:text-slate-900",
           )}
         >
           {option.label}
@@ -331,66 +346,108 @@ function NavButton({
   active,
   onClick,
 }: {
-  item: { id: View; label: string; icon: typeof Boxes };
+  item: { id: View; label: string; icon: typeof Boxes; accent: NavAccent };
   active: boolean;
   onClick: () => void;
 }) {
   const Icon = item.icon;
+  const accent = NAV_ACCENTS[item.accent];
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
         "flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-all duration-150",
-        active ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/5 hover:text-white/90",
+        active ? cn("bg-white/10 text-white") : "text-white/55 hover:bg-white/5 hover:text-white/90",
       )}
     >
-      <Icon className="h-4 w-4" />
+      <Icon className={cn("h-4 w-4", active && accent.darkText)} />
       {item.label}
     </button>
   );
 }
 
-function MobileTabBar({ view, setView }: { view: View; setView: (view: View) => void }) {
+function MobileMenuSheet({
+  open,
+  onClose,
+  view,
+  setView,
+  onLogout,
+}: {
+  open: boolean;
+  onClose: () => void;
+  view: View;
+  setView: (view: View) => void;
+  onLogout: () => void;
+}) {
   return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 lg:hidden"
-      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)", paddingTop: "0.5rem" }}
-    >
-      <div className="flex items-center gap-1 rounded-full border border-slate-200/70 bg-white/85 p-1.5 shadow-premium backdrop-blur-xl">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = view === item.id;
-          return (
+    <AnimatePresence>
+      {open ? (
+        <motion.div className="fixed inset-0 z-50 lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.button
+            type="button"
+            className="absolute inset-0 bg-slate-950/30 backdrop-blur-[2px]"
+            aria-label="Cerrar menu"
+            onClick={onClose}
+          />
+          <motion.div
+            className="absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-slate-200/70 bg-white p-4 shadow-premium"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 380, damping: 34 }}
+            style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }}
+          >
+            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200" />
+            <div className="flex items-center justify-between gap-3 pb-3">
+              <Brand />
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Cerrar menu">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="grid gap-1">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = view === item.id;
+                const accent = NAV_ACCENTS[item.accent];
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setView(item.id);
+                      onClose();
+                    }}
+                    className={cn(
+                      "flex h-12 items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors duration-150",
+                      active ? cn(accent.soft, accent.text) : "text-slate-700 hover:bg-slate-100",
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="my-3 border-t border-slate-200/70" />
+            <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-slate-400">Ciudad</p>
+            <LocationSwitcher fullWidth />
+
+            <div className="my-3 border-t border-slate-200/70" />
             <button
-              key={item.id}
               type="button"
-              onClick={() => setView(item.id)}
-              aria-label={item.label}
-              aria-current={active ? "page" : undefined}
-              className="relative flex h-12 min-w-[68px] flex-col items-center justify-center gap-0.5 rounded-full px-3"
+              onClick={onLogout}
+              className="flex h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium text-red-600 transition-colors duration-150 hover:bg-red-50"
             >
-              {active ? (
-                <motion.span
-                  layoutId="mobile-tab-bubble"
-                  className="absolute inset-0 rounded-full bg-slate-950"
-                  transition={{ type: "spring", stiffness: 500, damping: 34 }}
-                />
-              ) : null}
-              <Icon className={cn("relative z-10 h-5 w-5 transition-colors duration-150", active ? "text-white" : "text-slate-500")} />
-              <span
-                className={cn(
-                  "relative z-10 text-[11px] font-medium transition-colors duration-150",
-                  active ? "text-white" : "text-slate-500",
-                )}
-              >
-                {item.short}
-              </span>
+              <LogOut className="h-5 w-5" />
+              Salir
             </button>
-          );
-        })}
-      </div>
-    </nav>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
@@ -503,7 +560,7 @@ function StockView() {
               type="button"
               className={cn(
                 "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
-                activeTab === "inventario" ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
+                activeTab === "inventario" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
               )}
               onClick={() => setActiveTab("inventario")}
             >
@@ -513,7 +570,7 @@ function StockView() {
               type="button"
               className={cn(
                 "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
-                activeTab === "carga" ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
+                activeTab === "carga" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
               )}
               onClick={() => setActiveTab("carga")}
             >
@@ -1311,7 +1368,7 @@ function ListasView() {
             type="button"
             className={cn(
               "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
-              activeTab === "minorista" ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
+              activeTab === "minorista" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
             )}
             onClick={() => setActiveTab("minorista")}
           >
@@ -1321,7 +1378,7 @@ function ListasView() {
             type="button"
             className={cn(
               "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
-              activeTab === "mayorista" ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
+              activeTab === "mayorista" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
             )}
             onClick={() => setActiveTab("mayorista")}
           >
@@ -1331,7 +1388,7 @@ function ListasView() {
             type="button"
             className={cn(
               "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
-              activeTab === "presupuestador" ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900",
+              activeTab === "presupuestador" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
             )}
             onClick={() => setActiveTab("presupuestador")}
           >
@@ -1848,6 +1905,12 @@ function locationBadgeClass(location: LocationName) {
   return location === "Villa Maria"
     ? "border-amber-300 bg-amber-100 text-amber-900"
     : "border-sky-300 bg-sky-100 text-sky-900";
+}
+
+function locationFilterAccentText(filter: LocationFilter) {
+  if (filter === "Villa Maria") return "text-amber-700";
+  if (filter === "Buenos Aires") return "text-sky-700";
+  return "text-teal-700";
 }
 
 function StockPill({ product }: { product: Product }) {
