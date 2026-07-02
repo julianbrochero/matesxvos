@@ -21,6 +21,7 @@ import {
   Search,
   ShoppingBag,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -84,11 +85,11 @@ const navItems: { id: View; label: string; short: string; icon: typeof Boxes; ac
   { id: "listas", label: "Listas", short: "Listas", icon: Download, accent: "violet" },
 ];
 
-const NAV_ACCENTS: Record<NavAccent, { soft: string; text: string; darkBg: string; darkText: string }> = {
-  sky: { soft: "bg-sky-50", text: "text-sky-700", darkBg: "bg-sky-500/15", darkText: "text-sky-300" },
-  emerald: { soft: "bg-emerald-50", text: "text-emerald-700", darkBg: "bg-emerald-500/15", darkText: "text-emerald-300" },
-  amber: { soft: "bg-amber-50", text: "text-amber-700", darkBg: "bg-amber-400/20", darkText: "text-amber-300" },
-  violet: { soft: "bg-violet-50", text: "text-violet-700", darkBg: "bg-violet-500/15", darkText: "text-violet-300" },
+const NAV_ACCENTS: Record<NavAccent, { soft: string; text: string }> = {
+  sky: { soft: "bg-sky-50", text: "text-sky-700" },
+  emerald: { soft: "bg-emerald-50", text: "text-emerald-700" },
+  amber: { soft: "bg-amber-50", text: "text-amber-700" },
+  violet: { soft: "bg-violet-50", text: "text-violet-700" },
 };
 
 export default function Home() {
@@ -238,26 +239,30 @@ function AppShell({
   }
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
-      <aside className="hidden w-64 shrink-0 border-r border-white/5 bg-slate-950 p-4 text-white lg:block">
-        <Brand inverse />
-        <nav className="mt-6 grid gap-1">
-          {navItems.map((item) => (
-            <NavButton key={item.id} item={item} active={view === item.id} onClick={() => setView(item.id)} />
-          ))}
-        </nav>
-        <Button
-          className="mt-6 w-full justify-start text-white/55 hover:bg-white/5 hover:text-white"
-          variant="ghost"
-          onClick={() => void logout()}
-        >
-          <LogOut className="h-4 w-4" />
-          Salir
-        </Button>
+    <div className="mx-auto flex min-h-screen w-full max-w-[1440px] bg-slate-50">
+      <aside className="hidden w-64 shrink-0 p-3 lg:block">
+        <div className="sticky top-3 flex h-[calc(100vh-1.5rem)] flex-col rounded-[28px] border border-slate-200/60 bg-white/90 p-4 shadow-premium backdrop-blur-xl">
+          <Brand />
+          <nav className="mt-6 grid gap-1">
+            {navItems.map((item) => (
+              <NavButton key={item.id} item={item} active={view === item.id} onClick={() => setView(item.id)} />
+            ))}
+          </nav>
+          <div className="mt-auto border-t border-slate-200/70 pt-3">
+            <Button
+              className="w-full justify-start text-slate-500 hover:bg-red-50 hover:text-red-600"
+              variant="ghost"
+              onClick={() => void logout()}
+            >
+              <LogOut className="h-4 w-4" />
+              Salir
+            </Button>
+          </div>
+        </div>
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
+        <header className="sticky top-0 z-40 bg-slate-50/80 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex items-center gap-3">
               <div className="lg:hidden">
@@ -334,23 +339,18 @@ function LocationSwitcher({ fullWidth }: { fullWidth?: boolean }) {
   );
 }
 
-function Brand({ compact, inverse }: { compact?: boolean; inverse?: boolean }) {
+function Brand({ compact }: { compact?: boolean }) {
   return (
-    <div className="min-w-0">
-      <p
-        className={cn(
-          "truncate font-semibold tracking-tight",
-          compact ? "text-base" : "text-lg",
-          inverse ? "text-white" : "text-slate-950",
-        )}
-      >
-        Mates x Vos
-      </p>
-      {!compact ? (
-        <p className={cn("text-xs", inverse ? "text-white/45" : "text-slate-500")}>
-          Inventario por sucursal
+    <div className="flex min-w-0 items-center gap-2.5">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 text-sm font-bold text-white shadow-card">
+        M
+      </div>
+      <div className="min-w-0">
+        <p className={cn("truncate font-semibold tracking-tight text-slate-950", compact ? "text-base" : "text-[15px]")}>
+          Mates x Vos
         </p>
-      ) : null}
+        {!compact ? <p className="truncate text-xs text-slate-500">Inventario por sucursal</p> : null}
+      </div>
     </div>
   );
 }
@@ -371,11 +371,11 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-all duration-150",
-        active ? cn("bg-white/10 text-white") : "text-white/55 hover:bg-white/5 hover:text-white/90",
+        "flex h-10 items-center gap-3 rounded-2xl px-3 text-sm font-medium transition-all duration-150",
+        active ? cn(accent.soft, accent.text, "shadow-sm") : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
       )}
     >
-      <Icon className={cn("h-4 w-4", active && accent.darkText)} />
+      <Icon className="h-4 w-4" />
       {item.label}
     </button>
   );
@@ -405,7 +405,7 @@ function MobileMenuSheet({
             onClick={onClose}
           />
           <motion.div
-            className="absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-slate-200/70 bg-white p-4 shadow-premium"
+            className="absolute inset-x-0 bottom-0 rounded-t-[32px] border-t border-slate-200/70 bg-white p-4 shadow-premium"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -434,7 +434,7 @@ function MobileMenuSheet({
                       onClose();
                     }}
                     className={cn(
-                      "flex h-12 items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors duration-150",
+                      "flex h-12 items-center gap-3 rounded-2xl px-3 text-[15px] font-medium transition-colors duration-150",
                       active ? cn(accent.soft, accent.text) : "text-slate-700 hover:bg-slate-100",
                     )}
                   >
@@ -453,7 +453,7 @@ function MobileMenuSheet({
             <button
               type="button"
               onClick={onLogout}
-              className="flex h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium text-red-600 transition-colors duration-150 hover:bg-red-50"
+              className="flex h-12 w-full items-center gap-3 rounded-2xl px-3 text-[15px] font-medium text-red-600 transition-colors duration-150 hover:bg-red-50"
             >
               <LogOut className="h-5 w-5" />
               Salir
@@ -545,7 +545,7 @@ function StockView() {
   const updateStock = useStockStore((state) => state.updateStock);
   const notify = useAlertStore((state) => state.notify);
   const locationFilter = useLocationFilterStore((state) => state.locationFilter);
-  const [activeTab, setActiveTab] = useState<"inventario" | "carga">("inventario");
+  const [activeTab, setActiveTab] = useState<"inventario" | "carga" | "importar">("inventario");
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState("todos");
   const [editing, setEditing] = useState<Product | null>(null);
@@ -590,6 +590,16 @@ function StockView() {
             >
               Cargar stock
             </button>
+            <button
+              type="button"
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+                activeTab === "importar" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
+              )}
+              onClick={() => setActiveTab("importar")}
+            >
+              Importar
+            </button>
           </div>
           {activeTab === "inventario" ? (
             <Button onClick={() => setModalOpen(true)}>
@@ -602,6 +612,8 @@ function StockView() {
 
       {activeTab === "carga" ? (
         <StockLoadTab />
+      ) : activeTab === "importar" ? (
+        <ImportProductsTab />
       ) : (
         <>
       <Panel>
@@ -1328,6 +1340,310 @@ function StockLoadTab() {
         <ActivityList movements={purchases} />
       </Panel>
     </section>
+  );
+}
+
+type ImportedProductRow = {
+  name: string;
+  brand: string;
+  cost: number;
+  price: number;
+  stock: number;
+  imageUrl?: string;
+  include: boolean;
+};
+
+const IMPORT_FIELD_ALIASES: Record<"name" | "brand" | "cost" | "price" | "promoPrice" | "stock" | "imageUrl", string[]> = {
+  name: ["nombre", "nombre del producto", "producto", "name", "title", "titulo"],
+  brand: ["marca", "proveedor", "categorias", "categoria", "brand"],
+  cost: ["costo", "cost"],
+  price: ["precio", "price"],
+  promoPrice: ["precio promocional", "precio de oferta", "precio comparativo", "precio final", "promotional price", "compare at price"],
+  stock: ["stock", "cantidad", "cantidades", "existencias", "quantity"],
+  imageUrl: ["imagen 1", "imagen", "imagen url", "imagen url 1", "imagen src", "foto", "image", "image 1", "image src"],
+};
+
+function normalizeHeaderText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+function parseDelimitedText(text: string): string[][] {
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
+  const delimiter = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized[i];
+    if (inQuotes) {
+      if (char === '"') {
+        if (normalized[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === delimiter) {
+      row.push(field);
+      field = "";
+    } else if (char === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += char;
+    }
+  }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows.filter((cells) => cells.some((cell) => cell.trim().length > 0));
+}
+
+function parsePriceValue(raw: string): number {
+  const trimmed = raw.trim();
+  if (!trimmed) return 0;
+  const hasComma = trimmed.includes(",");
+  const hasDot = trimmed.includes(".");
+  let normalized = trimmed.replace(/[^0-9.,-]/g, "");
+  if (hasComma && hasDot) {
+    normalized = normalized.replace(/\./g, "").replace(",", ".");
+  } else if (hasComma) {
+    normalized = normalized.replace(",", ".");
+  }
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function parseTiendaNubeCsv(text: string): { rows: ImportedProductRow[]; skipped: number } {
+  const table = parseDelimitedText(text);
+  if (table.length < 2) return { rows: [], skipped: 0 };
+
+  const headers = table[0].map(normalizeHeaderText);
+  const columnIndex: Partial<Record<keyof typeof IMPORT_FIELD_ALIASES, number>> = {};
+
+  (Object.keys(IMPORT_FIELD_ALIASES) as (keyof typeof IMPORT_FIELD_ALIASES)[]).forEach((field) => {
+    const aliases = IMPORT_FIELD_ALIASES[field];
+    const index = headers.findIndex((header) => aliases.includes(header));
+    if (index !== -1) columnIndex[field] = index;
+  });
+
+  const rows: ImportedProductRow[] = [];
+  let skipped = 0;
+
+  for (const cells of table.slice(1)) {
+    const cell = (field: keyof typeof IMPORT_FIELD_ALIASES) => {
+      const index = columnIndex[field];
+      return index === undefined ? "" : (cells[index] ?? "").trim();
+    };
+
+    const name = cell("name");
+    const price = parsePriceValue(cell("price"));
+    if (!name || price <= 0) {
+      if (name || price) skipped++;
+      continue;
+    }
+
+    const promoPrice = parsePriceValue(cell("promoPrice"));
+    const cost = parsePriceValue(cell("cost"));
+    const stock = Math.max(0, Math.round(parsePriceValue(cell("stock"))));
+    const brand = cell("brand") || name;
+    const imageUrl = cell("imageUrl");
+
+    rows.push({
+      name,
+      brand,
+      cost: cost > 0 ? cost : Math.round(price * 0.6),
+      price: promoPrice > 0 ? promoPrice : price,
+      stock,
+      imageUrl: imageUrl || undefined,
+      include: true,
+    });
+  }
+
+  return { rows, skipped };
+}
+
+function ImportProductsTab() {
+  const addProduct = useStockStore((state) => state.addProduct);
+  const notify = useAlertStore((state) => state.notify);
+  const [location, setLocation] = useState<LocationName>("Buenos Aires");
+  const [rows, setRows] = useState<ImportedProductRow[]>([]);
+  const [skipped, setSkipped] = useState(0);
+  const [fileName, setFileName] = useState("");
+  const [importing, setImporting] = useState(false);
+
+  async function handleFile(file?: File) {
+    if (!file) return;
+    const text = await file.text();
+    const parsed = parseTiendaNubeCsv(text);
+    setRows(parsed.rows);
+    setSkipped(parsed.skipped);
+    setFileName(file.name);
+
+    if (!parsed.rows.length) {
+      notify({
+        type: "warning",
+        title: "No se encontraron productos",
+        message: "Revisá que el CSV tenga columnas de Nombre y Precio.",
+      });
+    }
+  }
+
+  function toggleRow(index: number) {
+    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, include: !row.include } : row)));
+  }
+
+  function updateRowField(index: number, field: "cost" | "price" | "stock", value: string) {
+    const parsed = Number(value);
+    setRows((current) =>
+      current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: Number.isFinite(parsed) ? parsed : 0 } : row)),
+    );
+  }
+
+  async function confirmImport() {
+    const selected = rows.filter((row) => row.include);
+    if (!selected.length) {
+      notify({ type: "warning", title: "Seleccioná al menos un producto para importar" });
+      return;
+    }
+
+    setImporting(true);
+    let created = 0;
+    try {
+      for (const row of selected) {
+        await addProduct({
+          name: row.name,
+          brand: row.brand,
+          location,
+          imageUrl: row.imageUrl,
+          cost: row.cost > 0 ? row.cost : 1,
+          price: row.price,
+          wholesalePrice: null,
+          stock: row.stock,
+          minStock: LOW_STOCK_LIMIT,
+        });
+        created++;
+      }
+      notify({ type: "success", title: "Importación completa", message: `${created} productos creados en ${location}` });
+      setRows([]);
+      setFileName("");
+      setSkipped(0);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-5">
+      <Panel title="Importar desde Tienda Nube" subtitle="Subí el CSV exportado desde tu panel de Tienda Nube.">
+        <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
+          <Input label="Archivo CSV" type="file" accept=".csv,text/csv" onChange={(event) => void handleFile(event.target.files?.[0])} />
+          <Select label="Ubicacion para lo importado" value={location} onChange={(event) => setLocation(event.target.value as LocationName)}>
+            {LOCATIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          </Select>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          Reconoce las columnas Nombre, Costo, Precio, Precio promocional, Stock e Imagen. Si hay precio promocional, se usa como precio final de venta.
+        </p>
+      </Panel>
+
+      {rows.length ? (
+        <Panel
+          title={`Vista previa · ${fileName}`}
+          subtitle={`${rows.filter((row) => row.include).length} de ${rows.length} productos seleccionados${skipped ? ` · ${skipped} filas omitidas por falta de nombre o precio` : ""}`}
+        >
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-slate-50/80 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2"></th>
+                  <th className="px-3 py-2">Foto</th>
+                  <th className="px-3 py-2">Producto</th>
+                  <th className="px-3 py-2">Costo</th>
+                  <th className="px-3 py-2">Precio final</th>
+                  <th className="px-3 py-2">Stock</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((row, index) => (
+                  <tr key={`${row.name}-${index}`} className={cn(!row.include && "opacity-40")}>
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={row.include}
+                        onChange={() => toggleRow(index)}
+                        aria-label={`Incluir ${row.name}`}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                        {row.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img className="h-full w-full object-cover" src={row.imageUrl} alt="" />
+                        ) : (
+                          <ImageIcon className="h-4 w-4 text-slate-400" />
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 font-medium">{row.name}</td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={row.cost}
+                        onChange={(event) => updateRowField(index, "cost", event.target.value)}
+                        className="h-9 w-24 rounded-lg border border-slate-200 px-2 text-sm outline-none focus:border-teal-500/60"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={row.price}
+                        onChange={(event) => updateRowField(index, "price", event.target.value)}
+                        className="h-9 w-24 rounded-lg border border-slate-200 px-2 text-sm outline-none focus:border-teal-500/60"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={row.stock}
+                        onChange={(event) => updateRowField(index, "stock", event.target.value)}
+                        className="h-9 w-20 rounded-lg border border-slate-200 px-2 text-sm outline-none focus:border-teal-500/60"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button onClick={() => void confirmImport()} disabled={importing}>
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {importing ? "Importando..." : `Importar ${rows.filter((row) => row.include).length} productos`}
+            </Button>
+          </div>
+        </Panel>
+      ) : null}
+    </div>
   );
 }
 
@@ -2680,6 +2996,7 @@ function movementMatchesLocation(movement: Movement, products: Product[], filter
 }
 
 function movementLocation(movement: Movement, products: Product[]) {
+  if (movement.location) return normalizeLocation(movement.location);
   const product = products.find((item) => item.id === movement.productId);
   return product ? productLocation(product) : LOCATIONS[0];
 }

@@ -86,6 +86,7 @@ create table if not exists public.movements (
   customer text,
   paid boolean not null default true,
   group_id uuid,
+  location text,
   created_at timestamptz not null default now()
 );
 
@@ -119,6 +120,32 @@ alter column paid set not null;
 update public.movements
 set status = 'entregado'
 where type = 'venta' and status is null;
+
+alter table public.movements
+add column if not exists location text;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'movements_location_valid'
+      and conrelid = 'public.movements'::regclass
+  ) then
+    alter table public.movements
+    add constraint movements_location_valid
+    check (location is null or location in ('Buenos Aires', 'Villa Maria'));
+  end if;
+end;
+$$;
+
+-- Backfill: copia la ubicación actual del producto a cada movimiento existente
+-- que todavía no tenga una ubicación propia guardada.
+update public.movements m
+set location = p.location
+from public.products p
+where m.location is null
+  and m.product_id = p.id;
 
 create or replace function public.touch_updated_at()
 returns trigger
@@ -170,7 +197,7 @@ begin
       cost = p_unit_cost
   where id = p_product_id;
 
-  insert into public.movements (product_id, type, quantity, title, detail, amount, profit, date)
+  insert into public.movements (product_id, type, quantity, title, detail, amount, profit, date, location)
   values (
     p_product_id,
     'compra',
@@ -179,7 +206,8 @@ begin
     p_quantity || ' ' || v_product.name || ' ingresaron al stock',
     v_amount,
     0,
-    p_date
+    p_date,
+    v_product.location
   );
 
   return jsonb_build_object('ok', true, 'amount', v_amount);
@@ -338,7 +366,7 @@ begin
         sold = sold + v_quantity
     where id = v_product_id;
 
-    insert into public.movements (product_id, type, quantity, status, title, detail, amount, profit, date, seller, payment, paid, customer, group_id)
+    insert into public.movements (product_id, type, quantity, status, title, detail, amount, profit, date, seller, payment, paid, customer, group_id, location)
     values (
       v_product_id,
       'venta',
@@ -353,7 +381,8 @@ begin
       p_payment,
       coalesce(p_paid, true),
       nullif(trim(coalesce(p_customer, '')), ''),
-      v_group_id
+      v_group_id,
+      v_product.location
     );
 
     v_total_amount := v_total_amount + v_amount;
@@ -378,14 +407,14 @@ from (
 ) as seed(name, brand, location, cost, price, wholesale_price, stock, min_stock, sold)
 where not exists (select 1 from public.products);
 
-insert into public.movements (type, status, title, detail, amount, profit, date, seller, payment, paid)
+insert into public.movements (type, status, title, detail, amount, profit, date, seller, payment, paid, location)
 select *
 from (
   values
-    ('venta', 'entregado', 'Venta registrada', '3 Baldo 1kg por Mercado Pago', 51000, 15000, current_date, 'Julian', 'Mercado Pago', true),
-    ('compra', null, 'Ingreso de mercadería', '20 Playadito 1kg al stock', 144000, 0, current_date - 1, null, null, true),
-    ('venta', 'entregado', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Santiago', 'Efectivo', false)
-) as seed(type, status, title, detail, amount, profit, date, seller, payment, paid)
+    ('venta', 'entregado', 'Venta registrada', '3 Baldo 1kg por Mercado Pago', 51000, 15000, current_date, 'Julian', 'Mercado Pago', true, 'Buenos Aires'),
+    ('compra', null, 'Ingreso de mercadería', '20 Playadito 1kg al stock', 144000, 0, current_date - 1, null, null, true, 'Buenos Aires'),
+    ('venta', 'entregado', 'Venta registrada', '2 Canarias Serena 1kg en efectivo', 31600, 10000, current_date - 2, 'Santiago', 'Efectivo', false, 'Villa Maria')
+) as seed(type, status, title, detail, amount, profit, date, seller, payment, paid, location)
 where not exists (select 1 from public.movements);
 
 notify pgrst, 'reload schema';
