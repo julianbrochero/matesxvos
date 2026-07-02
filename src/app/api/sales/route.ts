@@ -3,10 +3,15 @@ import { z } from "zod";
 import { requireAdminRequest } from "@/lib/auth";
 import { isSupabaseConfigured, getSupabaseAdmin } from "@/lib/supabase/server";
 
-const saleSchema = z.object({
+const saleLineSchema = z.object({
   productId: z.string().min(1),
   quantity: z.coerce.number().int().positive(),
   unitPrice: z.coerce.number().positive(),
+  unitCost: z.coerce.number().positive().optional(),
+});
+
+const saleSchema = z.object({
+  items: z.array(saleLineSchema).min(1),
   seller: z.string().min(1),
   payment: z.string().min(1),
   customer: z.string().trim().optional().transform((value) => value || null),
@@ -32,14 +37,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { data, error } = await getSupabaseAdmin().rpc("register_sale", {
-    p_product_id: parsed.data.productId,
-    p_quantity: parsed.data.quantity,
+  const { data, error } = await getSupabaseAdmin().rpc("register_sale_batch", {
+    p_items: parsed.data.items.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      unitCost: item.unitCost ?? null,
+    })),
     p_seller: parsed.data.seller,
     p_payment: parsed.data.payment,
     p_date: parsed.data.date,
     p_status: toDatabaseSaleStatus(parsed.data.status),
-    p_unit_price: parsed.data.unitPrice,
     p_paid: parsed.data.paymentStatus === "pagado",
     p_customer: parsed.data.customer,
   });

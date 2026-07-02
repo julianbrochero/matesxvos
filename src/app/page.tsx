@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   Boxes,
@@ -11,6 +12,7 @@ import {
   Edit3,
   Image as ImageIcon,
   LayoutDashboard,
+  Loader2,
   LogOut,
   Menu,
   MoreVertical,
@@ -19,7 +21,6 @@ import {
   Search,
   ShoppingBag,
   Trash2,
-  Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,11 +30,10 @@ import { Select } from "@/components/ui/select";
 import { AlertToaster } from "@/components/ui/alert-toaster";
 import { type AlertType, useAlertStore } from "@/lib/alerts";
 import { cn, currency, today } from "@/lib/utils";
-import { Movement, Product, type SaleUpdateInput, useStockStore } from "@/lib/store";
+import { Movement, Product, type SaleLineInput, type SaleUpdateInput, useStockStore } from "@/lib/store";
+import { LOCATIONS, type LocationFilter, type LocationName, useLocationFilterStore } from "@/lib/location";
 
-type View = "dashboard" | "stock" | "carga" | "ventas" | "precios" | "mayorista";
-type LocationName = "Buenos Aires" | "Villa Maria";
-type LocationFilter = "todos" | LocationName;
+type View = "dashboard" | "stock" | "ventas" | "listas";
 type SaleStatus = "entregado" | "encargado";
 type SaleFilter = "todos" | SaleStatus;
 type SalePaymentStatus = "pagado" | "no_pagado";
@@ -48,10 +48,22 @@ type SaleLineItem = {
   lineTotalInput: string;
   unitCostInput: string;
 };
+type SaleGroup = {
+  id: string;
+  ids: string[];
+  movements: Movement[];
+  date: string;
+  seller?: string;
+  payment?: string;
+  customer?: string;
+  status: SaleStatus;
+  paymentStatus: SalePaymentStatus;
+  amount: number;
+  profit: number;
+};
 type Notify = (alert: { type: AlertType; title: string; message?: string; persistent?: boolean }) => void;
 
 const LOW_STOCK_LIMIT = 5;
-const LOCATIONS: LocationName[] = ["Buenos Aires", "Villa Maria"];
 const VENDORS = ["Julian", "Santiago", "Agustina"] as const;
 const PAYMENT_METHODS = ["Mercado Pago", "Efectivo", "Transferencia", "Tarjeta", "A definir"] as const;
 const SALE_STATUSES: { id: SaleStatus; label: string }[] = [
@@ -63,14 +75,21 @@ const SALE_PAYMENT_STATUSES: { id: SalePaymentStatus; label: string }[] = [
   { id: "no_pagado", label: "No pagado" },
 ];
 
-const navItems: { id: View; label: string; short: string; icon: typeof Boxes }[] = [
-  { id: "dashboard", label: "Inicio", short: "Inicio", icon: LayoutDashboard },
-  { id: "ventas", label: "Ventas", short: "Ventas", icon: ShoppingBag },
-  { id: "stock", label: "Stock", short: "Stock", icon: Boxes },
-  { id: "carga", label: "Carga", short: "Carga", icon: PackagePlus },
-  { id: "precios", label: "Precios", short: "PDF", icon: Download },
-  { id: "mayorista", label: "Mayorista", short: "Mayor", icon: Users },
+type NavAccent = "sky" | "emerald" | "amber" | "violet";
+
+const navItems: { id: View; label: string; short: string; icon: typeof Boxes; accent: NavAccent }[] = [
+  { id: "dashboard", label: "Inicio", short: "Inicio", icon: LayoutDashboard, accent: "sky" },
+  { id: "ventas", label: "Ventas", short: "Ventas", icon: ShoppingBag, accent: "emerald" },
+  { id: "stock", label: "Stock", short: "Stock", icon: Boxes, accent: "amber" },
+  { id: "listas", label: "Listas", short: "Listas", icon: Download, accent: "violet" },
 ];
+
+const NAV_ACCENTS: Record<NavAccent, { soft: string; text: string; darkBg: string; darkText: string }> = {
+  sky: { soft: "bg-sky-50", text: "text-sky-700", darkBg: "bg-sky-500/15", darkText: "text-sky-300" },
+  emerald: { soft: "bg-emerald-50", text: "text-emerald-700", darkBg: "bg-emerald-500/15", darkText: "text-emerald-300" },
+  amber: { soft: "bg-amber-50", text: "text-amber-700", darkBg: "bg-amber-400/20", darkText: "text-amber-300" },
+  violet: { soft: "bg-violet-50", text: "text-violet-700", darkBg: "bg-violet-500/15", darkText: "text-violet-300" },
+};
 
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
@@ -106,7 +125,7 @@ export default function Home() {
     return (
       <>
         <AlertToaster />
-        <div className="min-h-screen bg-canvas" />
+        <div className="min-h-screen bg-slate-50" />
       </>
     );
   }
@@ -123,14 +142,12 @@ export default function Home() {
   return (
     <>
       <AlertToaster />
-      <main className="min-h-screen bg-canvas text-slate-950">
+      <main className="min-h-screen bg-slate-50 text-slate-950">
         <AppShell view={view} setView={setView} onLogout={() => setSignedIn(false)}>
           {view === "dashboard" && <DashboardView setView={setView} />}
-          {view === "stock" && <StockView setView={setView} />}
+          {view === "stock" && <StockView />}
           {view === "ventas" && <SalesView />}
-          {view === "carga" && <PurchasesView />}
-          {view === "precios" && <PricesView />}
-          {view === "mayorista" && <WholesaleView />}
+          {view === "listas" && <ListasView />}
         </AppShell>
       </main>
     </>
@@ -168,12 +185,9 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-canvas px-4 py-10">
-      <section className="w-full max-w-md rounded-3xl border border-slate-200/70 bg-white p-7 shadow-premium">
-        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-950 text-base font-semibold text-white">
-          M
-        </div>
-        <h1 className="mt-4 text-2xl font-semibold tracking-tight">Mates x Vos</h1>
+    <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10">
+      <section className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-semibold tracking-tight">Mates x Vos</h1>
         <p className="mt-1 text-sm text-slate-500">Stock, ventas y precios.</p>
         <form onSubmit={submit} className="mt-6 grid gap-4">
           <Input
@@ -223,99 +237,120 @@ function AppShell({
     onLogout();
   }
 
-  function navigate(nextView: View) {
-    setView(nextView);
-    setMenuOpen(false);
-  }
-
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-[1440px] bg-canvas">
-      <aside className="hidden w-[264px] shrink-0 p-3 lg:block">
-        <div className="sticky top-3 flex h-[calc(100vh-1.5rem)] flex-col rounded-3xl border border-slate-200/70 bg-white/80 p-4 shadow-rail backdrop-blur-xl">
-          <Brand />
-          <nav className="mt-6 grid gap-1">
-            {navItems.map((item) => (
-              <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
-            ))}
-          </nav>
-          <div className="mt-auto pt-4">
-            <Button
-              className="w-full justify-start text-slate-500 hover:text-slate-950"
-              variant="ghost"
-              onClick={() => void logout()}
-            >
-              <LogOut className="h-4 w-4" />
-              Salir
-            </Button>
-          </div>
-        </div>
+    <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
+      <aside className="hidden w-64 shrink-0 border-r border-white/5 bg-slate-950 p-4 text-white lg:block">
+        <Brand inverse />
+        <nav className="mt-6 grid gap-1">
+          {navItems.map((item) => (
+            <NavButton key={item.id} item={item} active={view === item.id} onClick={() => setView(item.id)} />
+          ))}
+        </nav>
+        <Button
+          className="mt-6 w-full justify-start text-white/55 hover:bg-white/5 hover:text-white"
+          variant="ghost"
+          onClick={() => void logout()}
+        >
+          <LogOut className="h-4 w-4" />
+          Salir
+        </Button>
       </aside>
 
-      {menuOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button className="absolute inset-0 bg-slate-950/30 backdrop-blur-sm" type="button" aria-label="Cerrar menu" onClick={() => setMenuOpen(false)} />
-          <aside className="relative flex h-full w-[82vw] max-w-xs flex-col bg-white p-4 shadow-2xl">
-            <div className="flex items-center justify-between gap-3">
-              <Brand />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMenuOpen(false)}
-                aria-label="Cerrar menu"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <nav className="mt-6 grid gap-1">
-              {navItems.map((item) => (
-                <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
-              ))}
-            </nav>
-          </aside>
-        </div>
-      ) : null}
-
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-40 bg-canvas/80 backdrop-blur-xl">
+        <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex items-center gap-3">
-              <Button className="lg:hidden" variant="ghost" size="icon" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
-                <Menu className="h-5 w-5" />
-              </Button>
               <div className="lg:hidden">
                 <Brand compact />
               </div>
               <p className="hidden text-sm text-slate-500 lg:block">Sistema de stock y ventas</p>
             </div>
-            <Button className="lg:hidden" variant="ghost" size="sm" onClick={() => void logout()}>
-              <LogOut className="h-4 w-4" />
-              Salir
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="hidden lg:block">
+                <LocationSwitcher />
+              </div>
+              <Button variant="ghost" size="sm" className="hidden lg:inline-flex" onClick={() => void logout()}>
+                <LogOut className="h-4 w-4" />
+                Salir
+              </Button>
+              <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
         </header>
         <div className="grid gap-4 px-4 py-5 sm:px-6 lg:py-6">
           {!loading && storeError ? <ConnectionMessage text={storeError} /> : null}
-          {children}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={view}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
+
+      <MobileMenuSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        view={view}
+        setView={setView}
+        onLogout={() => void logout()}
+      />
     </div>
   );
 }
 
-function Brand({ compact }: { compact?: boolean }) {
+function LocationSwitcher({ fullWidth }: { fullWidth?: boolean }) {
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
+  const setLocationFilter = useLocationFilterStore((state) => state.setLocationFilter);
+  const options: { value: LocationFilter; label: string }[] = [
+    { value: "todos", label: "Ambas" },
+    ...LOCATIONS.map((location) => ({ value: location, label: location })),
+  ];
+
   return (
-    <div className="flex min-w-0 items-center gap-2.5">
-      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">
-        M
-      </div>
+    <div className={cn("flex gap-1 rounded-xl bg-slate-100 p-1", fullWidth && "w-full")}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => setLocationFilter(option.value)}
+          className={cn(
+            "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 sm:text-sm",
+            fullWidth && "flex-1",
+            locationFilter === option.value ? cn("bg-white shadow-card", locationFilterAccentText(option.value)) : "text-slate-600 hover:text-slate-900",
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Brand({ compact, inverse }: { compact?: boolean; inverse?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p
+        className={cn(
+          "truncate font-semibold tracking-tight",
+          compact ? "text-base" : "text-lg",
+          inverse ? "text-white" : "text-slate-950",
+        )}
+      >
+        Mates x Vos
+      </p>
       {!compact ? (
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold tracking-tight text-slate-950">Mates x Vos</p>
-          <p className="truncate text-xs text-slate-500">Inventario por sucursal</p>
-        </div>
-      ) : (
-        <p className="truncate text-base font-semibold tracking-tight text-slate-950">Mates x Vos</p>
-      )}
+        <p className={cn("text-xs", inverse ? "text-white/45" : "text-slate-500")}>
+          Inventario por sucursal
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -325,56 +360,138 @@ function NavButton({
   active,
   onClick,
 }: {
-  item: { id: View; label: string; icon: typeof Boxes };
+  item: { id: View; label: string; icon: typeof Boxes; accent: NavAccent };
   active: boolean;
   onClick: () => void;
 }) {
   const Icon = item.icon;
+  const accent = NAV_ACCENTS[item.accent];
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all",
-        active
-          ? "bg-slate-950 text-white shadow-sm"
-          : "text-slate-500 hover:bg-slate-950/5 hover:text-slate-950",
+        "flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-all duration-150",
+        active ? cn("bg-white/10 text-white") : "text-white/55 hover:bg-white/5 hover:text-white/90",
       )}
     >
-      <Icon className="h-4 w-4" />
+      <Icon className={cn("h-4 w-4", active && accent.darkText)} />
       {item.label}
     </button>
+  );
+}
+
+function MobileMenuSheet({
+  open,
+  onClose,
+  view,
+  setView,
+  onLogout,
+}: {
+  open: boolean;
+  onClose: () => void;
+  view: View;
+  setView: (view: View) => void;
+  onLogout: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {open ? (
+        <motion.div className="fixed inset-0 z-50 lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.button
+            type="button"
+            className="absolute inset-0 bg-slate-950/30 backdrop-blur-[2px]"
+            aria-label="Cerrar menu"
+            onClick={onClose}
+          />
+          <motion.div
+            className="absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-slate-200/70 bg-white p-4 shadow-premium"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 380, damping: 34 }}
+            style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }}
+          >
+            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200" />
+            <div className="flex items-center justify-between gap-3 pb-3">
+              <Brand />
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Cerrar menu">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="grid gap-1">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = view === item.id;
+                const accent = NAV_ACCENTS[item.accent];
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setView(item.id);
+                      onClose();
+                    }}
+                    className={cn(
+                      "flex h-12 items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors duration-150",
+                      active ? cn(accent.soft, accent.text) : "text-slate-700 hover:bg-slate-100",
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="my-3 border-t border-slate-200/70" />
+            <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-slate-400">Ciudad</p>
+            <LocationSwitcher fullWidth />
+
+            <div className="my-3 border-t border-slate-200/70" />
+            <button
+              type="button"
+              onClick={onLogout}
+              className="flex h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium text-red-600 transition-colors duration-150 hover:bg-red-50"
+            >
+              <LogOut className="h-5 w-5" />
+              Salir
+            </button>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
 function DashboardView({ setView }: { setView: (view: View) => void }) {
   const products = useStockStore((state) => state.products);
   const movements = useStockStore((state) => state.movements);
-  const metrics = useMemo(() => getMetrics(products, movements), [products, movements]);
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
+  const filteredProducts = useMemo(
+    () => products.filter((product) => locationMatches(product, locationFilter)),
+    [products, locationFilter],
+  );
+  const filteredMovements = useMemo(
+    () => movements.filter((movement) => movementMatchesLocation(movement, products, locationFilter)),
+    [movements, products, locationFilter],
+  );
+  const metrics = useMemo(() => getMetrics(filteredProducts, filteredMovements), [filteredProducts, filteredMovements]);
   const stockByLocation = LOCATIONS.map((location) => ({
     location,
     stock: products
       .filter((product) => productLocation(product) === location)
       .reduce((sum, product) => sum + product.stock, 0),
   }));
-  const salesByLocation = LOCATIONS.map((location) => {
-    const locationSales = movements.filter(
-      (movement) => movement.type === "venta" && movementLocation(movement, products) === location,
-    );
-    return {
-      location,
-      sales: locationSales.reduce((sum, movement) => sum + movement.amount, 0),
-      profit: locationSales.reduce((sum, movement) => sum + movement.profit, 0),
-    };
-  });
-  const lowProducts = products.filter((product) => product.stock <= LOW_STOCK_LIMIT);
-  const recent = movements.slice(0, 6);
+  const lowProducts = filteredProducts.filter((product) => product.stock <= LOW_STOCK_LIMIT);
+  const recent = filteredMovements.slice(0, 6);
 
   return (
     <section className="grid gap-5">
       <PageHeader
         title="Inicio"
-        description="Resumen rapido del negocio."
+        description={locationFilter === "todos" ? "Resumen rapido del negocio." : `Resumen rapido de ${locationFilter}.`}
         action={
           <Button onClick={() => setView("ventas")}>
             <Plus className="h-4 w-4" />
@@ -383,26 +500,18 @@ function DashboardView({ setView }: { setView: (view: View) => void }) {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Productos" value={String(products.length)} />
-        <SummaryCard label="Buenos Aires" value={`${stockByLocation[0]?.stock ?? 0} u.`} />
-        <SummaryCard label="Villa Maria" value={`${stockByLocation[1]?.stock ?? 0} u.`} />
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <SummaryCard label="Productos" value={String(filteredProducts.length)} />
+        {locationFilter === "todos" ? (
+          <>
+            <SummaryCard label="Buenos Aires" value={`${stockByLocation[0]?.stock ?? 0} u.`} />
+            <SummaryCard label="Villa Maria" value={`${stockByLocation[1]?.stock ?? 0} u.`} />
+          </>
+        ) : (
+          <SummaryCard label={`Stock ${locationFilter}`} value={`${metrics.stock} u.`} />
+        )}
         <SummaryCard label="Ventas" value={currency(metrics.sales)} />
       </div>
-
-      <Panel title="Ventas por ciudad" subtitle="Vendido y ganancia, separados por sucursal">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {salesByLocation.map((entry) => (
-            <div key={entry.location} className={cn("rounded-xl border p-4", stockLocationCardClass(entry.location))}>
-              <div className="flex items-center justify-between gap-2">
-                <LocationBadge location={entry.location} />
-              </div>
-              <p className="mt-3 text-2xl font-semibold tracking-tight">{currency(entry.sales)}</p>
-              <p className="mt-1 text-sm font-medium text-emerald-700">+{currency(entry.profit)} ganancia</p>
-            </div>
-          ))}
-        </div>
-      </Panel>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
         <Panel title="Stock bajo" subtitle="Productos para revisar">
@@ -428,16 +537,17 @@ function DashboardView({ setView }: { setView: (view: View) => void }) {
   );
 }
 
-function StockView({ setView }: { setView: (view: View) => void }) {
+function StockView() {
   const products = useStockStore((state) => state.products);
   const addProduct = useStockStore((state) => state.addProduct);
   const updateProduct = useStockStore((state) => state.updateProduct);
   const deleteProduct = useStockStore((state) => state.deleteProduct);
   const updateStock = useStockStore((state) => state.updateStock);
   const notify = useAlertStore((state) => state.notify);
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
+  const [activeTab, setActiveTab] = useState<"inventario" | "carga">("inventario");
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState("todos");
-  const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
   const [editing, setEditing] = useState<Product | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -456,38 +566,60 @@ function StockView({ setView }: { setView: (view: View) => void }) {
 
   return (
     <section className="grid gap-5">
-      <PageHeader
-        title="Stock"
-        description="Productos, precios y ubicacion."
-        action={
-          <Button onClick={() => setModalOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Producto
-          </Button>
-        }
-      />
+      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
+        <PageHeader title="Stock" description="Productos, precios, ubicacion y carga de mercaderia." />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+                activeTab === "inventario" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
+              )}
+              onClick={() => setActiveTab("inventario")}
+            >
+              Inventario
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+                activeTab === "carga" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
+              )}
+              onClick={() => setActiveTab("carga")}
+            >
+              Cargar stock
+            </button>
+          </div>
+          {activeTab === "inventario" ? (
+            <Button onClick={() => setModalOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Producto
+            </Button>
+          ) : null}
+        </div>
+      </div>
 
+      {activeTab === "carga" ? (
+        <StockLoadTab />
+      ) : (
+        <>
       <Panel>
-        <div className="grid gap-3 md:grid-cols-[1fr_180px_180px_auto]">
+        <div className="grid gap-3 md:grid-cols-[1fr_200px]">
           <SearchInput value={search} onChange={setSearch} placeholder="Buscar producto" />
-          <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
           <Select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)} aria-label="Filtro de stock">
             <option value="todos">Todos</option>
             <option value="ok">Stock OK</option>
             <option value="bajo">Stock bajo</option>
           </Select>
-          <Button variant="secondary" onClick={() => setView("carga")}>
-            <PackagePlus className="h-4 w-4" />
-            Cargar stock
-          </Button>
         </div>
       </Panel>
 
       <StockLocationReference />
 
-      <div className="hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-soft md:block">
+      <div className="hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-card md:block">
         <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="bg-slate-50/80 text-xs font-medium uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Foto</th>
               <th className="px-4 py-3">Producto</th>
@@ -502,7 +634,7 @@ function StockView({ setView }: { setView: (view: View) => void }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((product) => (
-              <tr key={product.id} className={stockLocationRowClass(productLocation(product))}>
+              <tr key={product.id} className={cn("transition-colors duration-150", stockLocationRowClass(productLocation(product)))}>
                 <td className="px-4 py-3"><ProductThumb product={product} /></td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -569,6 +701,8 @@ function StockView({ setView }: { setView: (view: View) => void }) {
         ))}
         {!filtered.length ? <EmptyState title="Sin productos" text="Agrega productos para empezar." /> : null}
       </div>
+        </>
+      )}
 
       <ProductModal
         open={modalOpen}
@@ -603,12 +737,14 @@ function SalesView() {
   const deleteMovement = useStockStore((state) => state.deleteMovement);
   const notify = useAlertStore((state) => state.notify);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingSale, setEditingSale] = useState<Movement | null>(null);
+  const [editingSale, setEditingSale] = useState<SaleGroup | null>(null);
   const [actionMenuId, setActionMenuId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [statusFilter, setStatusFilter] = useState<SaleFilter>("todos");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<SalePaymentFilter>("todos");
-  const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
-  const [saleLocation, setSaleLocation] = useState<LocationName>("Buenos Aires");
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
+  const [saleLocation, setSaleLocation] = useState<LocationName>(locationFilter === "todos" ? LOCATIONS[0] : locationFilter);
   const [productId, setProductId] = useState(products[0]?.id ?? "");
   const [quantity, setQuantity] = useState("1");
   const [salePrice, setSalePrice] = useState("");
@@ -640,12 +776,17 @@ function SalesView() {
     return sum + (unitPrice - unitCost) * item.quantity;
   }, 0);
   const sales = movements.filter((movement) => movement.type === "venta");
-  const visibleSales = sales.filter((sale) => {
-    const statusOk = statusFilter === "todos" || saleStatus(sale) === statusFilter;
-    const paymentStatusOk = paymentStatusFilter === "todos" || salePaymentStatus(sale) === paymentStatusFilter;
-    const locationOk = movementMatchesLocation(sale, products, locationFilter);
+  const saleGroups = useMemo(() => buildSaleGroups(sales), [sales]);
+  const visibleSaleGroups = saleGroups.filter((sale) => {
+    const statusOk = statusFilter === "todos" || sale.status === statusFilter;
+    const paymentStatusOk = paymentStatusFilter === "todos" || sale.paymentStatus === paymentStatusFilter;
+    const locationOk = movementMatchesLocation(sale.movements[0], products, locationFilter);
     return statusOk && paymentStatusOk && locationOk;
   });
+
+  useEffect(() => {
+    if (locationFilter !== "todos") setSaleLocation(locationFilter);
+  }, [locationFilter]);
 
   useEffect(() => {
     if (saleProducts.some((product) => product.id === productId)) return;
@@ -749,15 +890,9 @@ function SalesView() {
       return;
     }
 
-    const saleMeta = {
-      seller,
-      payment,
-      customer: customer.trim() || undefined,
-      date,
-      status,
-      paymentStatus,
-    };
+    if (submittingRef.current) return;
 
+    const items: SaleLineInput[] = [];
     for (const item of cart) {
       const product = products.find((entry) => entry.id === item.productId);
       const unitPrice = parseOptionalPrice(item.unitPriceInput);
@@ -766,40 +901,50 @@ function SalesView() {
         notify({ type: "warning", title: "Revisá precios y costos", message: product?.name });
         return;
       }
-
-      const ok = await registerSale({
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPrice,
-        unitCost,
-        ...saleMeta,
-      });
-      if (!ok) {
-        notify({ type: "warning", title: "No hay stock suficiente", message: product?.name });
-        return;
-      }
+      items.push({ productId: item.productId, quantity: item.quantity, unitPrice, unitCost });
     }
 
-    const productNames = cart
-      .map((item) => products.find((entry) => entry.id === item.productId)?.name)
-      .filter(Boolean)
-      .join(", ");
-    notify({
-      type: "success",
-      title: status === "encargado" ? "Encargo registrado" : "Venta registrada",
-      message: productNames,
-    });
-    setModalOpen(false);
-    resetSaleForm();
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const ok = await registerSale({
+        items,
+        seller,
+        payment,
+        customer: customer.trim() || undefined,
+        date,
+        status,
+        paymentStatus,
+      });
+      if (!ok) {
+        notify({ type: "warning", title: "No hay stock suficiente para completar la venta" });
+        return;
+      }
+
+      const productNames = cart
+        .map((item) => products.find((entry) => entry.id === item.productId)?.name)
+        .filter(Boolean)
+        .join(", ");
+      notify({
+        type: "success",
+        title: status === "encargado" ? "Encargo registrado" : "Venta registrada",
+        message: productNames,
+      });
+      setModalOpen(false);
+      resetSaleForm();
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
-  async function changeSaleStatus(sale: Movement, nextStatus: SaleStatus) {
-    await updateSaleStatus(sale.id, nextStatus);
+  async function changeSaleStatus(sale: SaleGroup, nextStatus: SaleStatus) {
+    await updateSaleStatus(sale.ids, nextStatus);
     notify({ type: "success", title: "Estado actualizado", message: nextStatus === "encargado" ? "Encargado" : "Entregado" });
   }
 
-  async function changeSalePaymentStatus(sale: Movement, nextPaymentStatus: SalePaymentStatus) {
-    await updateSalePaymentStatus(sale.id, nextPaymentStatus);
+  async function changeSalePaymentStatus(sale: SaleGroup, nextPaymentStatus: SalePaymentStatus) {
+    await updateSalePaymentStatus(sale.ids, nextPaymentStatus);
     notify({
       type: "success",
       title: "Pago actualizado",
@@ -807,8 +952,8 @@ function SalesView() {
     });
   }
 
-  async function saveSaleEdit(sale: Movement, input: SaleUpdateInput) {
-    const ok = await updateSale(sale.id, input);
+  async function saveSaleEdit(sale: SaleGroup, input: SaleUpdateInput) {
+    const ok = await updateSale(sale.ids, input);
     if (!ok) {
       notify({
         type: "error",
@@ -820,12 +965,12 @@ function SalesView() {
     notify({
       type: "success",
       title: "Venta actualizada",
-      message: `${input.customer?.trim() || "Sin cliente"} - ${saleProductLabel(sale, products)}`,
+      message: `${input.customer?.trim() || "Sin cliente"} - ${saleGroupProductLabel(sale, products)}`,
     });
     setEditingSale(null);
   }
 
-  function openSaleEdit(sale: Movement) {
+  function openSaleEdit(sale: SaleGroup) {
     setEditingSale(sale);
     setActionMenuId("");
   }
@@ -844,14 +989,13 @@ function SalesView() {
       />
 
       <Panel>
-        <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_180px] lg:items-center">
+        <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px] lg:items-center">
           <div className="flex flex-wrap gap-2">
-            <SummaryPill label="Total" value={String(visibleSales.length)} />
-            <SummaryPill label="Encargos" value={String(sales.filter((sale) => saleStatus(sale) === "encargado").length)} />
-            <SummaryPill label="Pagadas" value={String(sales.filter((sale) => salePaymentStatus(sale) === "pagado").length)} />
-            <SummaryPill label="Vendido" value={currency(visibleSales.reduce((sum, sale) => sum + sale.amount, 0))} />
+            <SummaryPill label="Total" value={String(visibleSaleGroups.length)} />
+            <SummaryPill label="Encargos" value={String(saleGroups.filter((sale) => sale.status === "encargado").length)} />
+            <SummaryPill label="Pagadas" value={String(saleGroups.filter((sale) => sale.paymentStatus === "pagado").length)} />
+            <SummaryPill label="Vendido" value={currency(visibleSaleGroups.reduce((sum, sale) => sum + sale.amount, 0))} />
           </div>
-          <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
           <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as SaleFilter)} aria-label="Filtrar ventas">
             <option value="todos">Todos</option>
             {SALE_STATUSES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
@@ -867,9 +1011,9 @@ function SalesView() {
         </div>
       </Panel>
 
-      <div className="hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-soft md:block">
+      <div className="hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-card md:block">
         <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="bg-slate-50/80 text-xs font-medium uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Venta</th>
               <th className="px-4 py-3">Fecha</th>
@@ -881,12 +1025,12 @@ function SalesView() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {visibleSales.map((sale) => (
+            {visibleSaleGroups.map((sale) => (
               <tr
                 key={sale.id}
                 className={cn(
-                  "transition",
-                  salePaymentStatus(sale) === "pagado" ? "bg-emerald-50/70 hover:bg-emerald-50" : "hover:bg-slate-50",
+                  "transition-colors duration-150",
+                  sale.paymentStatus === "pagado" ? "bg-emerald-50/70 hover:bg-emerald-50" : "hover:bg-slate-50",
                 )}
               >
                 <td className="px-4 py-3">
@@ -896,12 +1040,12 @@ function SalesView() {
                 <td className="px-4 py-3 text-slate-600">{sale.payment ?? "-"}</td>
                 <td className="px-4 py-3">
                   <SalePaymentStatusSelect
-                    value={salePaymentStatus(sale)}
+                    value={sale.paymentStatus}
                     onChange={(nextPaymentStatus) => void changeSalePaymentStatus(sale, nextPaymentStatus)}
                   />
                 </td>
                 <td className="px-4 py-3">
-                  <SaleStatusSelect value={saleStatus(sale)} onChange={(nextStatus) => void changeSaleStatus(sale, nextStatus)} />
+                  <SaleStatusSelect value={sale.status} onChange={(nextStatus) => void changeSaleStatus(sale, nextStatus)} />
                 </td>
                 <td className="px-4 py-3 text-right">
                   <p className="font-medium">{currency(sale.amount)}</p>
@@ -924,16 +1068,16 @@ function SalesView() {
             ))}
           </tbody>
         </table>
-        {!visibleSales.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
+        {!visibleSaleGroups.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
       </div>
 
       <div className="grid gap-3 md:hidden">
-        {visibleSales.map((sale) => (
+        {visibleSaleGroups.map((sale) => (
           <SaleCard
             key={sale.id}
             sale={sale}
             products={products}
-            location={movementLocation(sale, products)}
+            location={movementLocation(sale.movements[0], products)}
             actionMenuOpen={actionMenuId === sale.id}
             onActionMenuToggle={() => setActionMenuId(actionMenuId === sale.id ? "" : sale.id)}
             onEdit={() => openSaleEdit(sale)}
@@ -945,13 +1089,8 @@ function SalesView() {
             onPaymentStatusChange={(nextPaymentStatus) => void changeSalePaymentStatus(sale, nextPaymentStatus)}
           />
         ))}
-        {!visibleSales.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
+        {!visibleSaleGroups.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
       </div>
-
-      <Button className="fixed bottom-6 right-4 z-30 rounded-full shadow-lg md:hidden" onClick={() => setModalOpen(true)} disabled={!products.length}>
-        <Plus className="h-5 w-5" />
-        Venta
-      </Button>
 
       <Modal
         open={modalOpen}
@@ -1089,9 +1228,9 @@ function SalesView() {
               <span className="font-semibold text-emerald-700">{currency(cartProfit)}</span>
             </div>
           </div>
-          <Button disabled={!cart.length}>
-            <ShoppingBag className="h-4 w-4" />
-            Guardar venta
+          <Button disabled={!cart.length || submitting}>
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className="h-4 w-4" />}
+            {submitting ? "Guardando..." : "Guardar venta"}
           </Button>
         </form>
       </Modal>
@@ -1101,15 +1240,13 @@ function SalesView() {
         products={products}
         onClose={() => setEditingSale(null)}
         onInvalid={(message) => notify({ type: "warning", title: message })}
-        onSubmit={(input) => {
-          if (editingSale) void saveSaleEdit(editingSale, input);
-        }}
+        onSubmit={(input) => (editingSale ? saveSaleEdit(editingSale, input) : undefined)}
       />
     </section>
   );
 }
 
-function PurchasesView() {
+function StockLoadTab() {
   const products = useStockStore((state) => state.products);
   const movements = useStockStore((state) => state.movements);
   const registerPurchase = useStockStore((state) => state.registerPurchase);
@@ -1123,6 +1260,8 @@ function PurchasesView() {
   const [quantity, setQuantity] = useState("1");
   const [unitCost, setUnitCost] = useState(locationProducts[0] ? String(locationProducts[0].cost) : "");
   const [date, setDate] = useState(today());
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const selected = locationProducts.find((product) => product.id === productId);
   const purchases = movements
     .filter((movement) => movement.type === "compra" && movementMatchesLocation(movement, products, stockLocation))
@@ -1137,17 +1276,24 @@ function PurchasesView() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const quantityValue = toPositiveInteger(quantity);
-    const costValue = toPositiveNumber(unitCost);
-    await registerPurchase({ productId, quantity: quantityValue, unitCost: costValue, date });
-    notify({ type: "success", title: "Stock actualizado", message: selected?.name });
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const quantityValue = toPositiveInteger(quantity);
+      const costValue = toPositiveNumber(unitCost);
+      await registerPurchase({ productId, quantity: quantityValue, unitCost: costValue, date });
+      notify({ type: "success", title: "Stock actualizado", message: selected?.name });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   return (
     <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <div className="grid gap-5">
-        <PageHeader title="Carga" description="Ingreso rapido de mercaderia." />
-        <Panel title="Agregar stock">
+        <Panel title="Agregar stock" subtitle="Ingreso rapido de mercaderia.">
           <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
             <Select label="Ubicacion" value={stockLocation} onChange={(event) => setStockLocation(event.target.value as LocationName)}>
               {LOCATIONS.map((location) => <option key={location} value={location}>{location}</option>)}
@@ -1170,9 +1316,9 @@ function PurchasesView() {
                 <span className="font-medium">{selected?.stock ?? 0} u.</span>
               </div>
             </div>
-            <Button disabled={!locationProducts.length}>
-              <PackagePlus className="h-4 w-4" />
-              Guardar carga
+            <Button disabled={!locationProducts.length || submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
+              {submitting ? "Guardando..." : "Guardar carga"}
             </Button>
           </form>
         </Panel>
@@ -1185,11 +1331,11 @@ function PurchasesView() {
   );
 }
 
-function PricesView() {
+function RetailPriceList() {
   const products = useStockStore((state) => state.products);
   const notify = useAlertStore((state) => state.notify);
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
   const [generating, setGenerating] = useState(false);
-  const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
   const availableProducts = products
     .filter((product) => product.stock > 0 && locationMatches(product, locationFilter))
     .sort(compareProductsByLocation);
@@ -1207,13 +1353,9 @@ function PricesView() {
   }
 
   return (
-    <section className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+    <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
       <div className="grid gap-5">
-        <PageHeader title="Precios" description="Lista simple para clientes." />
-        <Panel title="PDF">
-          <div className="mb-3">
-            <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
-          </div>
+        <Panel title="PDF minorista" subtitle="Lista simple para clientes.">
           <Button className="w-full" disabled={!availableProducts.length || generating} onClick={() => void handleDownload()}>
             <Download className="h-4 w-4" />
             {generating ? "Generando..." : "Descargar PDF"}
@@ -1239,33 +1381,132 @@ function PricesView() {
           {!availableProducts.length ? <EmptyState title="Sin productos" text="Carga stock para crear la lista." /> : null}
         </div>
       </Panel>
+    </div>
+  );
+}
+
+function ListasView() {
+  const [activeTab, setActiveTab] = useState<"minorista" | "mayorista" | "presupuestador">("minorista");
+
+  return (
+    <section className="grid gap-5">
+      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
+        <PageHeader title="Listas" description="Precios minoristas, catálogo mayorista y presupuestador." />
+        <div className="flex gap-1 rounded-xl bg-slate-100 p-1 self-start sm:self-auto">
+          <button
+            type="button"
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+              activeTab === "minorista" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
+            )}
+            onClick={() => setActiveTab("minorista")}
+          >
+            Minorista
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+              activeTab === "mayorista" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
+            )}
+            onClick={() => setActiveTab("mayorista")}
+          >
+            Mayorista
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+              activeTab === "presupuestador" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
+            )}
+            onClick={() => setActiveTab("presupuestador")}
+          >
+            Armar Presupuesto
+          </button>
+        </div>
+      </div>
+
+      {activeTab === "minorista" && <RetailPriceList />}
+      {activeTab === "mayorista" && <WholesalePriceList />}
+      {activeTab === "presupuestador" && <QuoteBuilder />}
     </section>
   );
 }
 
-function WholesaleView() {
+function WholesalePriceList() {
   const products = useStockStore((state) => state.products);
   const notify = useAlertStore((state) => state.notify);
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
   const [generating, setGenerating] = useState(false);
-  const [locationFilter, setLocationFilter] = useState<LocationFilter>("todos");
-  
-  // Tabs: "lista" | "presupuestador"
-  const [activeTab, setActiveTab] = useState<"lista" | "presupuestador">("lista");
-  
-  // Quote Builder States
-  const [clientName, setClientName] = useState("");
-  const [quoteItems, setQuoteItems] = useState<any[]>([]);
-  
-  // Form states for adding items
-  const [selectedProductId, setSelectedProductId] = useState<string>("custom");
-  const [customItemName, setCustomItemName] = useState("");
-  const [addItemQty, setAddItemQty] = useState("1");
-  const [addItemPrice, setAddItemPrice] = useState("");
 
   const wholesaleProducts = products
     .filter((product) => product.stock > 0 && product.wholesalePrice && locationMatches(product, locationFilter))
     .sort(compareProductsByLocation);
   const missingPrice = products.filter((product) => product.stock > 0 && !product.wholesalePrice).length;
+
+  async function handleDownload() {
+    setGenerating(true);
+    try {
+      await downloadPricePdf(wholesaleProducts, "wholesale");
+      notify({ type: "success", title: "PDF mayorista generado", message: `${wholesaleProducts.length} productos` });
+    } catch {
+      notify({ type: "error", title: "No pudimos generar el PDF", message: "Revisá las imágenes o intentá de nuevo" });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+      <div className="grid gap-5">
+        <Panel title="PDF mayorista" subtitle={missingPrice ? `${missingPrice} productos sin precio mayorista` : "Lista lista para compartir"}>
+          <Button className="w-full" disabled={!wholesaleProducts.length || generating} onClick={() => void handleDownload()}>
+            <Download className="h-4 w-4" />
+            {generating ? "Generando..." : "Descargar PDF"}
+          </Button>
+        </Panel>
+      </div>
+
+      <Panel title="Lista mayorista" subtitle={`${wholesaleProducts.length} productos disponibles`}>
+        <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+          {wholesaleProducts.map((product) => (
+            <div key={product.id} className="grid gap-3 p-3 sm:grid-cols-[48px_1fr_auto] sm:items-center">
+              <ProductThumb product={product} />
+              <div className="min-w-0">
+                <p className="font-medium">{product.name}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-slate-500">{product.brand}</p>
+                  <LocationBadge location={productLocation(product)} />
+                  <p className="text-sm text-slate-500">{product.stock} u.</p>
+                </div>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="font-medium">{currency(product.wholesalePrice ?? product.price)}</p>
+                <p className="text-xs text-slate-500">Minorista {currency(product.price)}</p>
+              </div>
+            </div>
+          ))}
+          {!wholesaleProducts.length ? <EmptyState title="Sin productos mayoristas" text="Agrega precio mayorista en cada producto." /> : null}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function QuoteBuilder() {
+  const products = useStockStore((state) => state.products);
+  const notify = useAlertStore((state) => state.notify);
+  const [generating, setGenerating] = useState(false);
+
+  // Quote Builder States
+  const [clientName, setClientName] = useState("");
+  const [quoteItems, setQuoteItems] = useState<any[]>([]);
+
+  // Form states for adding items
+  const [selectedProductId, setSelectedProductId] = useState<string>("custom");
+  const [customItemName, setCustomItemName] = useState("");
+  const [addItemQty, setAddItemQty] = useState("1");
+  const [addItemPrice, setAddItemPrice] = useState("");
 
   const selectedProduct = products.find((p) => p.id === selectedProductId);
 
@@ -1374,18 +1615,6 @@ function WholesaleView() {
     setQuoteItems((current) => current.filter((item) => item.id !== itemId));
   }
 
-  async function handleDownload() {
-    setGenerating(true);
-    try {
-      await downloadPricePdf(wholesaleProducts, "wholesale");
-      notify({ type: "success", title: "PDF mayorista generado", message: `${wholesaleProducts.length} productos` });
-    } catch {
-      notify({ type: "error", title: "No pudimos generar el PDF", message: "Revisá las imágenes o intentá de nuevo" });
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   async function handleDownloadQuote() {
     if (!quoteItems.length) return;
     setGenerating(true);
@@ -1415,71 +1644,6 @@ function WholesaleView() {
   }
 
   return (
-    <section className="grid gap-5">
-      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
-        <PageHeader title="Módulo Mayorista" description="Gestión de catálogo y presupuestador para clientes." />
-        <div className="flex gap-2 rounded-lg bg-slate-100 p-1 self-start sm:self-auto">
-          <button
-            type="button"
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition",
-              activeTab === "lista" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-            )}
-            onClick={() => setActiveTab("lista")}
-          >
-            Lista de Precios
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition",
-              activeTab === "presupuestador" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-            )}
-            onClick={() => setActiveTab("presupuestador")}
-          >
-            Armar Presupuesto
-          </button>
-        </div>
-      </div>
-
-      {activeTab === "lista" ? (
-        <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
-          <div className="grid gap-5">
-            <Panel title="PDF mayorista" subtitle={missingPrice ? `${missingPrice} productos sin precio mayorista` : "Lista lista para compartir"}>
-              <div className="mb-3">
-                <LocationFilterSelect value={locationFilter} onChange={setLocationFilter} label="Todas" />
-              </div>
-              <Button className="w-full" disabled={!wholesaleProducts.length || generating} onClick={() => void handleDownload()}>
-                <Download className="h-4 w-4" />
-                {generating ? "Generando..." : "Descargar PDF"}
-              </Button>
-            </Panel>
-          </div>
-
-          <Panel title="Lista mayorista" subtitle={`${wholesaleProducts.length} productos disponibles`}>
-            <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
-              {wholesaleProducts.map((product) => (
-                <div key={product.id} className="grid gap-3 p-3 sm:grid-cols-[48px_1fr_auto] sm:items-center">
-                  <ProductThumb product={product} />
-                  <div className="min-w-0">
-                    <p className="font-medium">{product.name}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <p className="text-sm text-slate-500">{product.brand}</p>
-                      <LocationBadge location={productLocation(product)} />
-                      <p className="text-sm text-slate-500">{product.stock} u.</p>
-                    </div>
-                  </div>
-                  <div className="text-left sm:text-right">
-                    <p className="font-medium">{currency(product.wholesalePrice ?? product.price)}</p>
-                    <p className="text-xs text-slate-500">Minorista {currency(product.price)}</p>
-                  </div>
-                </div>
-              ))}
-              {!wholesaleProducts.length ? <EmptyState title="Sin productos mayoristas" text="Agrega precio mayorista en cada producto." /> : null}
-            </div>
-          </Panel>
-        </div>
-      ) : (
         <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="grid gap-5 self-start">
             <Panel title="Detalles del Cliente" subtitle="Cargá los datos del presupuesto.">
@@ -1653,8 +1817,6 @@ function WholesaleView() {
             </div>
           </Panel>
         </div>
-      )}
-    </section>
   );
 }
 
@@ -1662,7 +1824,7 @@ function PageHeader({ title, description, action }: { title: string; description
   return (
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-[26px] font-semibold tracking-tight text-slate-950">{title}</h1>
         {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
       </div>
       {action ? <div className="flex shrink-0">{action}</div> : null}
@@ -1672,10 +1834,10 @@ function PageHeader({ title, description, action }: { title: string; description
 
 function Panel({ title, subtitle, children }: { title?: string; subtitle?: string; children?: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-soft sm:p-5">
+    <section className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-card sm:p-5">
       {title ? (
         <div className="mb-4">
-          <h2 className="font-semibold tracking-tight">{title}</h2>
+          <h2 className="font-semibold tracking-tight text-slate-950">{title}</h2>
           {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
         </div>
       ) : null}
@@ -1686,7 +1848,7 @@ function Panel({ title, subtitle, children }: { title?: string; subtitle?: strin
 
 function SummaryCard({ label, value, tone }: { label: string; value: string; tone?: "ok" | "warning" }) {
   return (
-    <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-soft">
+    <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-card transition-shadow duration-200 hover:shadow-card-hover">
       <p className="text-sm text-slate-500">{label}</p>
       <p className={cn("mt-2 text-2xl font-semibold tracking-tight", tone === "warning" && "text-amber-700", tone === "ok" && "text-emerald-700")}>{value}</p>
     </div>
@@ -1695,7 +1857,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: string; ton
 
 function SummaryPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200/70 bg-white px-3 py-2">
+    <div className="rounded-xl border border-slate-200/70 bg-white px-3 py-2 shadow-card">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="font-medium">{value}</p>
     </div>
@@ -1705,26 +1867,14 @@ function SummaryPill({ label, value }: { label: string; value: string }) {
 function SearchInput({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
   return (
     <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-      <Input className="pl-9" placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <Input
+        className="border-transparent bg-slate-50 pl-10 focus:border-teal-500/60 focus:bg-white"
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
-  );
-}
-
-function LocationFilterSelect({
-  value,
-  onChange,
-  label,
-}: {
-  value: LocationFilter;
-  onChange: (value: LocationFilter) => void;
-  label: string;
-}) {
-  return (
-    <Select value={value} onChange={(event) => onChange(event.target.value as LocationFilter)} aria-label="Filtrar por ubicacion">
-      <option value="todos">{label}</option>
-      {LOCATIONS.map((location) => <option key={location} value={location}>{location}</option>)}
-    </Select>
   );
 }
 
@@ -1786,6 +1936,12 @@ function locationBadgeClass(location: LocationName) {
     : "border-sky-300 bg-sky-100 text-sky-900";
 }
 
+function locationFilterAccentText(filter: LocationFilter) {
+  if (filter === "Villa Maria") return "text-amber-700";
+  if (filter === "Buenos Aires") return "text-sky-700";
+  return "text-teal-700";
+}
+
 function StockPill({ product }: { product: Product }) {
   const low = product.stock <= LOW_STOCK_LIMIT;
   return (
@@ -1838,7 +1994,7 @@ function SaleCard({
   onStatusChange,
   onPaymentStatusChange,
 }: {
-  sale: Movement;
+  sale: SaleGroup;
   products: Product[];
   location: string;
   actionMenuOpen: boolean;
@@ -1848,8 +2004,8 @@ function SaleCard({
   onStatusChange: (status: SaleStatus) => void;
   onPaymentStatusChange: (paymentStatus: SalePaymentStatus) => void;
 }) {
-  const status = saleStatus(sale);
-  const paymentStatus = salePaymentStatus(sale);
+  const status = sale.status;
+  const paymentStatus = sale.paymentStatus;
 
   return (
     <article
@@ -1925,10 +2081,12 @@ function SaleActionMenu({
   );
 }
 
-function SaleSummary({ sale, products }: { sale: Movement; products: Product[] }) {
-  const unitPrice = saleUnitPrice(sale);
-  const product = sale.productId ? products.find((item) => item.id === sale.productId) : undefined;
-  const unitCost = saleUnitCost(sale, product);
+function SaleSummary({ sale, products }: { sale: SaleGroup; products: Product[] }) {
+  const isSingle = sale.movements.length === 1;
+  const singleMovement = sale.movements[0];
+  const product = singleMovement.productId ? products.find((item) => item.id === singleMovement.productId) : undefined;
+  const unitPrice = saleUnitPrice(singleMovement);
+  const unitCost = saleUnitCost(singleMovement, product);
 
   return (
     <div className="min-w-0">
@@ -1936,18 +2094,35 @@ function SaleSummary({ sale, products }: { sale: Movement; products: Product[] }
         <span className="inline-flex max-w-full rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
           <span className="truncate">{sale.customer ? sale.customer : "Sin cliente"}</span>
         </span>
+        {!isSingle ? (
+          <span className="inline-flex rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+            {sale.movements.length} productos
+          </span>
+        ) : null}
         <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
           Ganancia {currency(sale.profit)}
         </span>
       </div>
-      <p className="mt-0.5 break-words text-sm font-medium text-slate-700">
-        Producto: {saleProductLabel(sale, products)}
-      </p>
-      <p className="mt-0.5 text-xs text-slate-500">
-        {sale.detail} · Precio final {currency(sale.amount)}
-        {sale.quantity && sale.quantity > 1 ? ` (${currency(unitPrice)} c/u)` : ""}
-        {" · "}Costo {currency(unitCost)} c/u
-      </p>
+      {isSingle ? (
+        <>
+          <p className="mt-0.5 break-words text-sm font-medium text-slate-700">
+            Producto: {saleProductLabel(singleMovement, products)}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {singleMovement.detail} · Precio final {currency(sale.amount)}
+            {singleMovement.quantity && singleMovement.quantity > 1 ? ` (${currency(unitPrice)} c/u)` : ""}
+            {" · "}Costo {currency(unitCost)} c/u
+          </p>
+        </>
+      ) : (
+        <div className="mt-1 grid gap-0.5">
+          {sale.movements.map((movement) => (
+            <p key={movement.id} className="break-words text-xs text-slate-600">
+              {saleProductLabel(movement, products)} · {currency(movement.amount)}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1959,12 +2134,14 @@ function SaleEditModal({
   onSubmit,
   onInvalid,
 }: {
-  sale: Movement | null;
+  sale: SaleGroup | null;
   products: Product[];
   onClose: () => void;
-  onSubmit: (input: SaleUpdateInput) => void;
+  onSubmit: (input: SaleUpdateInput) => Promise<void> | void;
   onInvalid: (message: string) => void;
 }) {
+  const isGroup = (sale?.movements.length ?? 0) > 1;
+  const singleMovement = !isGroup ? sale?.movements[0] : undefined;
   const [seller, setSeller] = useState<(typeof VENDORS)[number]>("Julian");
   const [payment, setPayment] = useState<(typeof PAYMENT_METHODS)[number]>("Mercado Pago");
   const [customer, setCustomer] = useState("");
@@ -1974,15 +2151,17 @@ function SaleEditModal({
   const [unitPrice, setUnitPrice] = useState("");
   const [lineTotal, setLineTotal] = useState("");
   const [unitCost, setUnitCost] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
-  const product = sale?.productId ? products.find((item) => item.id === sale.productId) : undefined;
-  const quantity = sale?.quantity ?? 1;
+  const product = singleMovement?.productId ? products.find((item) => item.id === singleMovement.productId) : undefined;
+  const quantity = singleMovement?.quantity ?? 1;
   const parsedUnitPrice = parseOptionalPrice(unitPrice);
   const parsedLineTotal = parseOptionalPrice(lineTotal);
   const parsedUnitCost = parseOptionalPrice(unitCost);
-  const effectiveUnitPrice = parsedUnitPrice ?? (sale ? saleUnitPrice(sale) : 0);
+  const effectiveUnitPrice = parsedUnitPrice ?? (singleMovement ? saleUnitPrice(singleMovement) : 0);
   const effectiveLineTotal = parsedLineTotal ?? effectiveUnitPrice * quantity;
-  const effectiveUnitCost = parsedUnitCost ?? (sale ? saleUnitCost(sale, product) : product?.cost ?? 0);
+  const effectiveUnitCost = parsedUnitCost ?? (singleMovement ? saleUnitCost(singleMovement, product) : product?.cost ?? 0);
   const estimatedProfit = (effectiveUnitPrice - effectiveUnitCost) * quantity;
 
   useEffect(() => {
@@ -1995,39 +2174,60 @@ function SaleEditModal({
     );
     setCustomer(sale.customer ?? "");
     setDate(sale.date);
-    setStatus(saleStatus(sale));
-    setPaymentStatus(salePaymentStatus(sale));
-    const currentUnitPrice = saleUnitPrice(sale);
-    const currentUnitCost = saleUnitCost(sale, product);
-    setUnitPrice(String(Math.round(currentUnitPrice)));
-    setLineTotal(String(Math.round(sale.amount)));
-    setUnitCost(String(Math.round(currentUnitCost)));
-  }, [sale, product]);
+    setStatus(sale.status);
+    setPaymentStatus(sale.paymentStatus);
+    submittingRef.current = false;
+    setSubmitting(false);
+    if (singleMovement) {
+      const currentUnitPrice = saleUnitPrice(singleMovement);
+      const currentUnitCost = saleUnitCost(singleMovement, product);
+      setUnitPrice(String(Math.round(currentUnitPrice)));
+      setLineTotal(String(Math.round(singleMovement.amount)));
+      setUnitCost(String(Math.round(currentUnitCost)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sale]);
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!parsedUnitPrice) {
-      onInvalid("Ingresá un precio de venta válido");
-      return;
+    if (submittingRef.current) return;
+
+    if (!isGroup) {
+      if (!parsedUnitPrice) {
+        onInvalid("Ingresá un precio de venta válido");
+        return;
+      }
+      if (!parsedUnitCost) {
+        onInvalid("Ingresá un costo válido");
+        return;
+      }
     }
-    if (!parsedUnitCost) {
-      onInvalid("Ingresá un costo válido");
-      return;
+
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        seller,
+        payment,
+        customer: customer.trim(),
+        date,
+        status,
+        paymentStatus,
+        ...(isGroup ? {} : { unitPrice: parsedUnitPrice ?? undefined, unitCost: parsedUnitCost ?? undefined }),
+      });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
-    onSubmit({
-      seller,
-      payment,
-      customer: customer.trim(),
-      date,
-      status,
-      paymentStatus,
-      unitPrice: parsedUnitPrice,
-      unitCost: parsedUnitCost,
-    });
   }
 
   return (
-    <Modal open={Boolean(sale)} title="Editar venta" subtitle={sale?.detail} onClose={onClose}>
+    <Modal
+      open={Boolean(sale)}
+      title="Editar venta"
+      subtitle={isGroup ? `${sale?.movements.length} productos` : singleMovement?.detail}
+      onClose={onClose}
+    >
       <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
         <Input label="Cliente (opcional)" value={customer} onChange={(event) => setCustomer(event.target.value)} />
         <div className="grid gap-4 sm:grid-cols-2">
@@ -2036,9 +2236,22 @@ function SaleEditModal({
             {VENDORS.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
           </Select>
         </div>
-        {sale?.productId ? (
+        {isGroup ? (
+          <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Productos de esta venta</p>
+            {sale?.movements.map((movement) => (
+              <div key={movement.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-700">{saleProductLabel(movement, products)}</span>
+                <span className="font-medium">{currency(movement.amount)}</span>
+              </div>
+            ))}
+            <p className="text-xs text-slate-500">
+              Para cambiar el precio de un producto puntual, eliminá esta venta y volvé a cargarla.
+            </p>
+          </div>
+        ) : singleMovement?.productId ? (
           <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-sm font-medium text-slate-700">{saleProductLabel(sale, products)}</p>
+            <p className="text-sm font-medium text-slate-700">{saleProductLabel(singleMovement, products)}</p>
             <div className="grid gap-4 sm:grid-cols-3">
               <Input
                 label="Precio unitario"
@@ -2108,8 +2321,11 @@ function SaleEditModal({
           </Select>
         </div>
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button type="submit">Guardar cambios</Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>Cancelar</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {submitting ? "Guardando..." : "Guardar cambios"}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -2226,6 +2442,8 @@ function ProductModal({
     stock: "",
   });
   const [imageError, setImageError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     setForm({
@@ -2239,6 +2457,8 @@ function ProductModal({
       stock: product ? String(product.stock) : "",
     });
     setImageError("");
+    submittingRef.current = false;
+    setSubmitting(false);
   }, [product, open]);
 
   async function handleImageFile(file?: File) {
@@ -2257,19 +2477,27 @@ function ProductModal({
     setImageError("");
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    onSubmit({
-      name: form.name.trim(),
-      brand: form.brand.trim(),
-      location: normalizeLocation(form.location),
-      imageUrl: form.imageUrl.trim() || undefined,
-      cost: toPositiveNumber(form.cost),
-      price: toPositiveNumber(form.price),
-      wholesalePrice: product?.wholesalePrice ?? null,
-      stock: toNonNegativeInteger(form.stock),
-      minStock: product?.minStock ?? LOW_STOCK_LIMIT,
-    });
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        name: form.name.trim(),
+        brand: form.brand.trim(),
+        location: normalizeLocation(form.location),
+        imageUrl: form.imageUrl.trim() || undefined,
+        cost: toPositiveNumber(form.cost),
+        price: toPositiveNumber(form.price),
+        wholesalePrice: product?.wholesalePrice ?? null,
+        stock: toNonNegativeInteger(form.stock),
+        minStock: product?.minStock ?? LOW_STOCK_LIMIT,
+      });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -2308,8 +2536,11 @@ function ProductModal({
           </div>
         </div>
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button type="submit">{product ? "Guardar" : "Crear"}</Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>Cancelar</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {submitting ? "Guardando..." : product ? "Guardar" : "Crear"}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -2362,11 +2593,46 @@ async function confirmDelete(product: Product, deleteProduct: (id: string) => Pr
   notify({ type: "success", title: "Producto eliminado", message: product.name });
 }
 
-async function removeSale(sale: Movement, deleteMovement: (id: string) => Promise<void>, notify: Notify) {
-  const ok = window.confirm("Eliminar esta venta? El stock se devuelve automaticamente.");
+async function removeSale(sale: SaleGroup, deleteMovement: (ids: string[]) => Promise<void>, notify: Notify) {
+  const confirmMessage =
+    sale.ids.length > 1
+      ? "Eliminar esta venta con varios productos? El stock se devuelve automaticamente."
+      : "Eliminar esta venta? El stock se devuelve automaticamente.";
+  const ok = window.confirm(confirmMessage);
   if (!ok) return;
-  await deleteMovement(sale.id);
+  await deleteMovement(sale.ids);
   notify({ type: "success", title: "Venta eliminada", message: "El stock fue devuelto" });
+}
+
+function buildSaleGroups(sales: Movement[]): SaleGroup[] {
+  const groups = new Map<string, Movement[]>();
+  for (const sale of sales) {
+    const key = sale.groupId ?? sale.id;
+    const list = groups.get(key);
+    if (list) list.push(sale);
+    else groups.set(key, [sale]);
+  }
+
+  return Array.from(groups.entries()).map(([key, movements]) => {
+    const first = movements[0];
+    return {
+      id: key,
+      ids: movements.map((movement) => movement.id),
+      movements,
+      date: first.date,
+      seller: first.seller,
+      payment: first.payment,
+      customer: first.customer,
+      status: saleStatus(first),
+      paymentStatus: salePaymentStatus(first),
+      amount: movements.reduce((sum, movement) => sum + movement.amount, 0),
+      profit: movements.reduce((sum, movement) => sum + movement.profit, 0),
+    };
+  });
+}
+
+function saleGroupProductLabel(group: SaleGroup, products: Product[]) {
+  return group.movements.map((movement) => saleProductLabel(movement, products)).join(", ");
 }
 
 function saleStatus(movement: Movement): SaleStatus {
@@ -2414,7 +2680,6 @@ function movementMatchesLocation(movement: Movement, products: Product[], filter
 }
 
 function movementLocation(movement: Movement, products: Product[]) {
-  if (movement.location) return normalizeLocation(movement.location);
   const product = products.find((item) => item.id === movement.productId);
   return product ? productLocation(product) : LOCATIONS[0];
 }

@@ -7,14 +7,14 @@ import {
   type Product,
   type ProductInput,
   type PurchaseInput,
-  type SaleInput,
+  type SaleBatchInput,
   type SaleUpdateInput,
   seedMovements,
   seedProducts,
 } from "@/lib/domain";
 import { today } from "@/lib/utils";
 
-export type { Movement, Product, ProductInput, PurchaseInput, SaleInput, SaleUpdateInput } from "@/lib/domain";
+export type { Movement, Product, ProductInput, PurchaseInput, SaleBatchInput, SaleLineInput, SaleUpdateInput } from "@/lib/domain";
 
 type BootstrapPayload = {
   products: Product[];
@@ -33,11 +33,11 @@ type StockState = {
   deleteProduct: (id: string) => Promise<void>;
   updateStock: (id: string, stock: number) => Promise<void>;
   registerPurchase: (input: PurchaseInput) => Promise<void>;
-  registerSale: (input: SaleInput) => Promise<boolean>;
-  updateSale: (id: string, input: SaleUpdateInput) => Promise<boolean>;
-  updateSaleStatus: (id: string, status: NonNullable<Movement["status"]>) => Promise<void>;
-  updateSalePaymentStatus: (id: string, paymentStatus: NonNullable<Movement["paymentStatus"]>) => Promise<void>;
-  deleteMovement: (id: string) => Promise<void>;
+  registerSale: (input: SaleBatchInput) => Promise<boolean>;
+  updateSale: (id: string | string[], input: SaleUpdateInput) => Promise<boolean>;
+  updateSaleStatus: (id: string | string[], status: NonNullable<Movement["status"]>) => Promise<void>;
+  updateSalePaymentStatus: (id: string | string[], paymentStatus: NonNullable<Movement["paymentStatus"]>) => Promise<void>;
+  deleteMovement: (id: string | string[]) => Promise<void>;
 };
 
 const LOCAL_MODE_ENABLED = process.env.NODE_ENV !== "production";
@@ -101,7 +101,6 @@ function localAddProduct(product: ProductInput, state: StockState) {
         amount: 0,
         profit: 0,
         date: today(),
-        location: product.location,
       },
       ...state.movements,
     ],
@@ -120,7 +119,6 @@ function localUpdateProduct(productId: string, product: ProductInput, state: Sto
         amount: 0,
         profit: 0,
         date: today(),
-        location: product.location,
       },
       ...state.movements,
     ],
@@ -128,7 +126,6 @@ function localUpdateProduct(productId: string, product: ProductInput, state: Sto
 }
 
 function localUpdateStock(productId: string, stock: number, state: StockState) {
-  const product = state.products.find((item) => item.id === productId);
   return {
     products: state.products.map((item) => (item.id === productId ? { ...item, stock } : item)),
     movements: [
@@ -140,7 +137,6 @@ function localUpdateStock(productId: string, stock: number, state: StockState) {
         amount: 0,
         profit: 0,
         date: today(),
-        location: product?.location,
       },
       ...state.movements,
     ],
@@ -167,7 +163,6 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
         amount: total,
         profit: 0,
         date,
-        location: product.location,
       },
       ...state.movements,
     ],
@@ -175,44 +170,54 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
 }
 
 function localRegisterSale(
-  { productId, quantity, unitPrice, unitCost, seller, payment, customer, date, status, paymentStatus }: SaleInput,
+  { items, seller, payment, customer, date, status, paymentStatus }: SaleBatchInput,
   state: StockState,
 ) {
-  const product = state.products.find((item) => item.id === productId);
-  if (!product || product.stock < quantity) return null;
+  if (!items.length) return null;
 
-  const salePrice = unitPrice > 0 ? unitPrice : product.price;
-  const saleCost = unitCost !== undefined && unitCost > 0 ? unitCost : product.cost;
-  const amount = salePrice * quantity;
-  const profit = (salePrice - saleCost) * quantity;
+  const products = items.map((item) => state.products.find((entry) => entry.id === item.productId));
+  if (products.some((product, index) => !product || product.stock < items[index].quantity)) return null;
+
+  const groupId = items.length > 1 ? id("g") : undefined;
+  let nextProducts = state.products;
+  const newMovements: Movement[] = [];
+
+  items.forEach((item, index) => {
+    const product = products[index]!;
+    const salePrice = item.unitPrice > 0 ? item.unitPrice : product.price;
+    const saleCost = item.unitCost !== undefined && item.unitCost > 0 ? item.unitCost : product.cost;
+    const amount = salePrice * item.quantity;
+    const profit = (salePrice - saleCost) * item.quantity;
+
+    nextProducts = nextProducts.map((entry) =>
+      entry.id === item.productId
+        ? { ...entry, stock: entry.stock - item.quantity, sold: entry.sold + item.quantity }
+        : entry,
+    );
+
+    newMovements.push({
+      id: id("m"),
+      type: "venta",
+      productId: item.productId,
+      quantity: item.quantity,
+      title: "Venta registrada",
+      detail: `${item.quantity} ${product.name} por ${payment}`,
+      amount,
+      profit,
+      unitCost: saleCost,
+      date,
+      seller,
+      payment,
+      customer: customer?.trim() || undefined,
+      status,
+      paymentStatus,
+      groupId,
+    });
+  });
 
   return {
-    products: state.products.map((item) =>
-      item.id === productId
-        ? { ...item, stock: item.stock - quantity, sold: item.sold + quantity }
-        : item,
-    ),
-    movements: [
-      {
-        id: id("m"),
-        type: "venta" as const,
-        productId,
-        quantity,
-        title: "Venta registrada",
-        detail: `${quantity} ${product.name} por ${payment}`,
-        amount,
-        profit,
-        unitCost: saleCost,
-        date,
-        seller,
-        payment,
-        customer: customer?.trim() || undefined,
-        status,
-        paymentStatus,
-        location: product.location,
-      },
-      ...state.movements,
-    ],
+    products: nextProducts,
+    movements: [...newMovements, ...state.movements],
   };
 }
 
@@ -494,21 +499,26 @@ export const useStockStore = create<StockState>()(
           return true;
         }
       },
-      updateSale: async (movementId, input) => {
+      updateSale: async (movementIds, input) => {
+        const ids = Array.isArray(movementIds) ? movementIds : [movementIds];
         if (!get().remote) {
           if (!LOCAL_MODE_ENABLED) {
             set({ error: DATABASE_CONNECTION_ERROR });
             return false;
           }
-          set((state) => localUpdateSale(movementId, input, state));
+          set((state) => ids.reduce((acc, movementId) => ({ ...acc, ...localUpdateSale(movementId, input, acc) }), state));
           return true;
         }
 
         try {
-          await apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
-            method: "PATCH",
-            body: JSON.stringify(input),
-          });
+          await Promise.all(
+            ids.map((movementId) =>
+              apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
+                method: "PATCH",
+                body: JSON.stringify(input),
+              }),
+            ),
+          );
           await get().hydrate();
           return true;
         } catch (error) {
@@ -516,21 +526,26 @@ export const useStockStore = create<StockState>()(
           return false;
         }
       },
-      updateSaleStatus: async (movementId, status) => {
+      updateSaleStatus: async (movementIds, status) => {
+        const ids = Array.isArray(movementIds) ? movementIds : [movementIds];
         if (!get().remote) {
           if (!LOCAL_MODE_ENABLED) {
             set({ error: DATABASE_CONNECTION_ERROR });
             return;
           }
-          set((state) => localUpdateSaleStatus(movementId, status, state));
+          set((state) => ids.reduce((acc, movementId) => ({ ...acc, ...localUpdateSaleStatus(movementId, status, acc) }), state));
           return;
         }
 
         try {
-          await apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
-            method: "PATCH",
-            body: JSON.stringify({ status }),
-          });
+          await Promise.all(
+            ids.map((movementId) =>
+              apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
+                method: "PATCH",
+                body: JSON.stringify({ status }),
+              }),
+            ),
+          );
           await get().hydrate();
         } catch (error) {
           if (!LOCAL_MODE_ENABLED) {
@@ -538,26 +553,33 @@ export const useStockStore = create<StockState>()(
             return;
           }
           set((state) => ({
-            ...localUpdateSaleStatus(movementId, status, state),
+            ...ids.reduce((acc, movementId) => ({ ...acc, ...localUpdateSaleStatus(movementId, status, acc) }), state),
             error: error instanceof Error ? error.message : "",
           }));
         }
       },
-      updateSalePaymentStatus: async (movementId, paymentStatus) => {
+      updateSalePaymentStatus: async (movementIds, paymentStatus) => {
+        const ids = Array.isArray(movementIds) ? movementIds : [movementIds];
         if (!get().remote) {
           if (!LOCAL_MODE_ENABLED) {
             set({ error: DATABASE_CONNECTION_ERROR });
             return;
           }
-          set((state) => localUpdateSalePaymentStatus(movementId, paymentStatus, state));
+          set((state) =>
+            ids.reduce((acc, movementId) => ({ ...acc, ...localUpdateSalePaymentStatus(movementId, paymentStatus, acc) }), state),
+          );
           return;
         }
 
         try {
-          await apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
-            method: "PATCH",
-            body: JSON.stringify({ paymentStatus }),
-          });
+          await Promise.all(
+            ids.map((movementId) =>
+              apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
+                method: "PATCH",
+                body: JSON.stringify({ paymentStatus }),
+              }),
+            ),
+          );
           await get().hydrate();
         } catch (error) {
           if (!LOCAL_MODE_ENABLED) {
@@ -565,25 +587,30 @@ export const useStockStore = create<StockState>()(
             return;
           }
           set((state) => ({
-            ...localUpdateSalePaymentStatus(movementId, paymentStatus, state),
+            ...ids.reduce((acc, movementId) => ({ ...acc, ...localUpdateSalePaymentStatus(movementId, paymentStatus, acc) }), state),
             error: error instanceof Error ? error.message : "",
           }));
         }
       },
-      deleteMovement: async (movementId) => {
+      deleteMovement: async (movementIds) => {
+        const ids = Array.isArray(movementIds) ? movementIds : [movementIds];
         if (!get().remote) {
           if (!LOCAL_MODE_ENABLED) {
             set({ error: DATABASE_CONNECTION_ERROR });
             return;
           }
-          set((state) => localDeleteMovement(movementId, state));
+          set((state) => ids.reduce((acc, movementId) => ({ ...acc, ...localDeleteMovement(movementId, acc) }), state));
           return;
         }
 
         try {
-          await apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
-            method: "DELETE",
-          });
+          await Promise.all(
+            ids.map((movementId) =>
+              apiRequest<{ ok: boolean }>(`/api/movements/${movementId}`, {
+                method: "DELETE",
+              }),
+            ),
+          );
           await get().hydrate();
         } catch (error) {
           if (!LOCAL_MODE_ENABLED) {
@@ -591,7 +618,7 @@ export const useStockStore = create<StockState>()(
             return;
           }
           set((state) => ({
-            ...localDeleteMovement(movementId, state),
+            ...ids.reduce((acc, movementId) => ({ ...acc, ...localDeleteMovement(movementId, acc) }), state),
             error: error instanceof Error ? error.message : "",
           }));
         }
