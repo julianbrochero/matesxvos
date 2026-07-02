@@ -30,6 +30,7 @@ export type Movement = {
   payment?: string;
   customer?: string;
   unitCost?: number;
+  groupId?: string;
 };
 
 export type PurchaseInput = {
@@ -39,11 +40,15 @@ export type PurchaseInput = {
   date: string;
 };
 
-export type SaleInput = {
+export type SaleLineInput = {
   productId: string;
   quantity: number;
   unitPrice: number;
   unitCost?: number;
+};
+
+export type SaleBatchInput = {
+  items: SaleLineInput[];
   seller: string;
   payment: string;
   customer?: string;

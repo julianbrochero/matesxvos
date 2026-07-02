@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { AnimatePresence, motion } from "framer-motion";
@@ -12,6 +12,7 @@ import {
   Edit3,
   Image as ImageIcon,
   LayoutDashboard,
+  Loader2,
   LogOut,
   Menu,
   MoreVertical,
@@ -29,7 +30,7 @@ import { Select } from "@/components/ui/select";
 import { AlertToaster } from "@/components/ui/alert-toaster";
 import { type AlertType, useAlertStore } from "@/lib/alerts";
 import { cn, currency, today } from "@/lib/utils";
-import { Movement, Product, type SaleUpdateInput, useStockStore } from "@/lib/store";
+import { Movement, Product, type SaleLineInput, type SaleUpdateInput, useStockStore } from "@/lib/store";
 import { LOCATIONS, type LocationFilter, type LocationName, useLocationFilterStore } from "@/lib/location";
 
 type View = "dashboard" | "stock" | "ventas" | "listas";
@@ -46,6 +47,19 @@ type SaleLineItem = {
   unitPriceInput: string;
   lineTotalInput: string;
   unitCostInput: string;
+};
+type SaleGroup = {
+  id: string;
+  ids: string[];
+  movements: Movement[];
+  date: string;
+  seller?: string;
+  payment?: string;
+  customer?: string;
+  status: SaleStatus;
+  paymentStatus: SalePaymentStatus;
+  amount: number;
+  profit: number;
 };
 type Notify = (alert: { type: AlertType; title: string; message?: string; persistent?: boolean }) => void;
 
@@ -723,8 +737,10 @@ function SalesView() {
   const deleteMovement = useStockStore((state) => state.deleteMovement);
   const notify = useAlertStore((state) => state.notify);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingSale, setEditingSale] = useState<Movement | null>(null);
+  const [editingSale, setEditingSale] = useState<SaleGroup | null>(null);
   const [actionMenuId, setActionMenuId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [statusFilter, setStatusFilter] = useState<SaleFilter>("todos");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<SalePaymentFilter>("todos");
   const locationFilter = useLocationFilterStore((state) => state.locationFilter);
@@ -760,10 +776,11 @@ function SalesView() {
     return sum + (unitPrice - unitCost) * item.quantity;
   }, 0);
   const sales = movements.filter((movement) => movement.type === "venta");
-  const visibleSales = sales.filter((sale) => {
-    const statusOk = statusFilter === "todos" || saleStatus(sale) === statusFilter;
-    const paymentStatusOk = paymentStatusFilter === "todos" || salePaymentStatus(sale) === paymentStatusFilter;
-    const locationOk = movementMatchesLocation(sale, products, locationFilter);
+  const saleGroups = useMemo(() => buildSaleGroups(sales), [sales]);
+  const visibleSaleGroups = saleGroups.filter((sale) => {
+    const statusOk = statusFilter === "todos" || sale.status === statusFilter;
+    const paymentStatusOk = paymentStatusFilter === "todos" || sale.paymentStatus === paymentStatusFilter;
+    const locationOk = movementMatchesLocation(sale.movements[0], products, locationFilter);
     return statusOk && paymentStatusOk && locationOk;
   });
 
@@ -873,15 +890,9 @@ function SalesView() {
       return;
     }
 
-    const saleMeta = {
-      seller,
-      payment,
-      customer: customer.trim() || undefined,
-      date,
-      status,
-      paymentStatus,
-    };
+    if (submittingRef.current) return;
 
+    const items: SaleLineInput[] = [];
     for (const item of cart) {
       const product = products.find((entry) => entry.id === item.productId);
       const unitPrice = parseOptionalPrice(item.unitPriceInput);
@@ -890,40 +901,50 @@ function SalesView() {
         notify({ type: "warning", title: "Revisá precios y costos", message: product?.name });
         return;
       }
-
-      const ok = await registerSale({
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPrice,
-        unitCost,
-        ...saleMeta,
-      });
-      if (!ok) {
-        notify({ type: "warning", title: "No hay stock suficiente", message: product?.name });
-        return;
-      }
+      items.push({ productId: item.productId, quantity: item.quantity, unitPrice, unitCost });
     }
 
-    const productNames = cart
-      .map((item) => products.find((entry) => entry.id === item.productId)?.name)
-      .filter(Boolean)
-      .join(", ");
-    notify({
-      type: "success",
-      title: status === "encargado" ? "Encargo registrado" : "Venta registrada",
-      message: productNames,
-    });
-    setModalOpen(false);
-    resetSaleForm();
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const ok = await registerSale({
+        items,
+        seller,
+        payment,
+        customer: customer.trim() || undefined,
+        date,
+        status,
+        paymentStatus,
+      });
+      if (!ok) {
+        notify({ type: "warning", title: "No hay stock suficiente para completar la venta" });
+        return;
+      }
+
+      const productNames = cart
+        .map((item) => products.find((entry) => entry.id === item.productId)?.name)
+        .filter(Boolean)
+        .join(", ");
+      notify({
+        type: "success",
+        title: status === "encargado" ? "Encargo registrado" : "Venta registrada",
+        message: productNames,
+      });
+      setModalOpen(false);
+      resetSaleForm();
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
-  async function changeSaleStatus(sale: Movement, nextStatus: SaleStatus) {
-    await updateSaleStatus(sale.id, nextStatus);
+  async function changeSaleStatus(sale: SaleGroup, nextStatus: SaleStatus) {
+    await updateSaleStatus(sale.ids, nextStatus);
     notify({ type: "success", title: "Estado actualizado", message: nextStatus === "encargado" ? "Encargado" : "Entregado" });
   }
 
-  async function changeSalePaymentStatus(sale: Movement, nextPaymentStatus: SalePaymentStatus) {
-    await updateSalePaymentStatus(sale.id, nextPaymentStatus);
+  async function changeSalePaymentStatus(sale: SaleGroup, nextPaymentStatus: SalePaymentStatus) {
+    await updateSalePaymentStatus(sale.ids, nextPaymentStatus);
     notify({
       type: "success",
       title: "Pago actualizado",
@@ -931,8 +952,8 @@ function SalesView() {
     });
   }
 
-  async function saveSaleEdit(sale: Movement, input: SaleUpdateInput) {
-    const ok = await updateSale(sale.id, input);
+  async function saveSaleEdit(sale: SaleGroup, input: SaleUpdateInput) {
+    const ok = await updateSale(sale.ids, input);
     if (!ok) {
       notify({
         type: "error",
@@ -944,12 +965,12 @@ function SalesView() {
     notify({
       type: "success",
       title: "Venta actualizada",
-      message: `${input.customer?.trim() || "Sin cliente"} - ${saleProductLabel(sale, products)}`,
+      message: `${input.customer?.trim() || "Sin cliente"} - ${saleGroupProductLabel(sale, products)}`,
     });
     setEditingSale(null);
   }
 
-  function openSaleEdit(sale: Movement) {
+  function openSaleEdit(sale: SaleGroup) {
     setEditingSale(sale);
     setActionMenuId("");
   }
@@ -970,10 +991,10 @@ function SalesView() {
       <Panel>
         <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px] lg:items-center">
           <div className="flex flex-wrap gap-2">
-            <SummaryPill label="Total" value={String(visibleSales.length)} />
-            <SummaryPill label="Encargos" value={String(sales.filter((sale) => saleStatus(sale) === "encargado").length)} />
-            <SummaryPill label="Pagadas" value={String(sales.filter((sale) => salePaymentStatus(sale) === "pagado").length)} />
-            <SummaryPill label="Vendido" value={currency(visibleSales.reduce((sum, sale) => sum + sale.amount, 0))} />
+            <SummaryPill label="Total" value={String(visibleSaleGroups.length)} />
+            <SummaryPill label="Encargos" value={String(saleGroups.filter((sale) => sale.status === "encargado").length)} />
+            <SummaryPill label="Pagadas" value={String(saleGroups.filter((sale) => sale.paymentStatus === "pagado").length)} />
+            <SummaryPill label="Vendido" value={currency(visibleSaleGroups.reduce((sum, sale) => sum + sale.amount, 0))} />
           </div>
           <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as SaleFilter)} aria-label="Filtrar ventas">
             <option value="todos">Todos</option>
@@ -1004,12 +1025,12 @@ function SalesView() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {visibleSales.map((sale) => (
+            {visibleSaleGroups.map((sale) => (
               <tr
                 key={sale.id}
                 className={cn(
                   "transition-colors duration-150",
-                  salePaymentStatus(sale) === "pagado" ? "bg-emerald-50/70 hover:bg-emerald-50" : "hover:bg-slate-50",
+                  sale.paymentStatus === "pagado" ? "bg-emerald-50/70 hover:bg-emerald-50" : "hover:bg-slate-50",
                 )}
               >
                 <td className="px-4 py-3">
@@ -1019,12 +1040,12 @@ function SalesView() {
                 <td className="px-4 py-3 text-slate-600">{sale.payment ?? "-"}</td>
                 <td className="px-4 py-3">
                   <SalePaymentStatusSelect
-                    value={salePaymentStatus(sale)}
+                    value={sale.paymentStatus}
                     onChange={(nextPaymentStatus) => void changeSalePaymentStatus(sale, nextPaymentStatus)}
                   />
                 </td>
                 <td className="px-4 py-3">
-                  <SaleStatusSelect value={saleStatus(sale)} onChange={(nextStatus) => void changeSaleStatus(sale, nextStatus)} />
+                  <SaleStatusSelect value={sale.status} onChange={(nextStatus) => void changeSaleStatus(sale, nextStatus)} />
                 </td>
                 <td className="px-4 py-3 text-right">
                   <p className="font-medium">{currency(sale.amount)}</p>
@@ -1047,16 +1068,16 @@ function SalesView() {
             ))}
           </tbody>
         </table>
-        {!visibleSales.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
+        {!visibleSaleGroups.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
       </div>
 
       <div className="grid gap-3 md:hidden">
-        {visibleSales.map((sale) => (
+        {visibleSaleGroups.map((sale) => (
           <SaleCard
             key={sale.id}
             sale={sale}
             products={products}
-            location={movementLocation(sale, products)}
+            location={movementLocation(sale.movements[0], products)}
             actionMenuOpen={actionMenuId === sale.id}
             onActionMenuToggle={() => setActionMenuId(actionMenuId === sale.id ? "" : sale.id)}
             onEdit={() => openSaleEdit(sale)}
@@ -1068,7 +1089,7 @@ function SalesView() {
             onPaymentStatusChange={(nextPaymentStatus) => void changeSalePaymentStatus(sale, nextPaymentStatus)}
           />
         ))}
-        {!visibleSales.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
+        {!visibleSaleGroups.length ? <EmptyState title="Sin ventas" text="Registra una venta nueva." /> : null}
       </div>
 
       <Modal
@@ -1207,9 +1228,9 @@ function SalesView() {
               <span className="font-semibold text-emerald-700">{currency(cartProfit)}</span>
             </div>
           </div>
-          <Button disabled={!cart.length}>
-            <ShoppingBag className="h-4 w-4" />
-            Guardar venta
+          <Button disabled={!cart.length || submitting}>
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className="h-4 w-4" />}
+            {submitting ? "Guardando..." : "Guardar venta"}
           </Button>
         </form>
       </Modal>
@@ -1219,9 +1240,7 @@ function SalesView() {
         products={products}
         onClose={() => setEditingSale(null)}
         onInvalid={(message) => notify({ type: "warning", title: message })}
-        onSubmit={(input) => {
-          if (editingSale) void saveSaleEdit(editingSale, input);
-        }}
+        onSubmit={(input) => (editingSale ? saveSaleEdit(editingSale, input) : undefined)}
       />
     </section>
   );
@@ -1241,6 +1260,8 @@ function StockLoadTab() {
   const [quantity, setQuantity] = useState("1");
   const [unitCost, setUnitCost] = useState(locationProducts[0] ? String(locationProducts[0].cost) : "");
   const [date, setDate] = useState(today());
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const selected = locationProducts.find((product) => product.id === productId);
   const purchases = movements
     .filter((movement) => movement.type === "compra" && movementMatchesLocation(movement, products, stockLocation))
@@ -1255,10 +1276,18 @@ function StockLoadTab() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const quantityValue = toPositiveInteger(quantity);
-    const costValue = toPositiveNumber(unitCost);
-    await registerPurchase({ productId, quantity: quantityValue, unitCost: costValue, date });
-    notify({ type: "success", title: "Stock actualizado", message: selected?.name });
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const quantityValue = toPositiveInteger(quantity);
+      const costValue = toPositiveNumber(unitCost);
+      await registerPurchase({ productId, quantity: quantityValue, unitCost: costValue, date });
+      notify({ type: "success", title: "Stock actualizado", message: selected?.name });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -1287,9 +1316,9 @@ function StockLoadTab() {
                 <span className="font-medium">{selected?.stock ?? 0} u.</span>
               </div>
             </div>
-            <Button disabled={!locationProducts.length}>
-              <PackagePlus className="h-4 w-4" />
-              Guardar carga
+            <Button disabled={!locationProducts.length || submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
+              {submitting ? "Guardando..." : "Guardar carga"}
             </Button>
           </form>
         </Panel>
@@ -1965,7 +1994,7 @@ function SaleCard({
   onStatusChange,
   onPaymentStatusChange,
 }: {
-  sale: Movement;
+  sale: SaleGroup;
   products: Product[];
   location: string;
   actionMenuOpen: boolean;
@@ -1975,8 +2004,8 @@ function SaleCard({
   onStatusChange: (status: SaleStatus) => void;
   onPaymentStatusChange: (paymentStatus: SalePaymentStatus) => void;
 }) {
-  const status = saleStatus(sale);
-  const paymentStatus = salePaymentStatus(sale);
+  const status = sale.status;
+  const paymentStatus = sale.paymentStatus;
 
   return (
     <article
@@ -2052,10 +2081,12 @@ function SaleActionMenu({
   );
 }
 
-function SaleSummary({ sale, products }: { sale: Movement; products: Product[] }) {
-  const unitPrice = saleUnitPrice(sale);
-  const product = sale.productId ? products.find((item) => item.id === sale.productId) : undefined;
-  const unitCost = saleUnitCost(sale, product);
+function SaleSummary({ sale, products }: { sale: SaleGroup; products: Product[] }) {
+  const isSingle = sale.movements.length === 1;
+  const singleMovement = sale.movements[0];
+  const product = singleMovement.productId ? products.find((item) => item.id === singleMovement.productId) : undefined;
+  const unitPrice = saleUnitPrice(singleMovement);
+  const unitCost = saleUnitCost(singleMovement, product);
 
   return (
     <div className="min-w-0">
@@ -2063,18 +2094,35 @@ function SaleSummary({ sale, products }: { sale: Movement; products: Product[] }
         <span className="inline-flex max-w-full rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
           <span className="truncate">{sale.customer ? sale.customer : "Sin cliente"}</span>
         </span>
+        {!isSingle ? (
+          <span className="inline-flex rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+            {sale.movements.length} productos
+          </span>
+        ) : null}
         <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
           Ganancia {currency(sale.profit)}
         </span>
       </div>
-      <p className="mt-0.5 break-words text-sm font-medium text-slate-700">
-        Producto: {saleProductLabel(sale, products)}
-      </p>
-      <p className="mt-0.5 text-xs text-slate-500">
-        {sale.detail} · Precio final {currency(sale.amount)}
-        {sale.quantity && sale.quantity > 1 ? ` (${currency(unitPrice)} c/u)` : ""}
-        {" · "}Costo {currency(unitCost)} c/u
-      </p>
+      {isSingle ? (
+        <>
+          <p className="mt-0.5 break-words text-sm font-medium text-slate-700">
+            Producto: {saleProductLabel(singleMovement, products)}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {singleMovement.detail} · Precio final {currency(sale.amount)}
+            {singleMovement.quantity && singleMovement.quantity > 1 ? ` (${currency(unitPrice)} c/u)` : ""}
+            {" · "}Costo {currency(unitCost)} c/u
+          </p>
+        </>
+      ) : (
+        <div className="mt-1 grid gap-0.5">
+          {sale.movements.map((movement) => (
+            <p key={movement.id} className="break-words text-xs text-slate-600">
+              {saleProductLabel(movement, products)} · {currency(movement.amount)}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2086,12 +2134,14 @@ function SaleEditModal({
   onSubmit,
   onInvalid,
 }: {
-  sale: Movement | null;
+  sale: SaleGroup | null;
   products: Product[];
   onClose: () => void;
-  onSubmit: (input: SaleUpdateInput) => void;
+  onSubmit: (input: SaleUpdateInput) => Promise<void> | void;
   onInvalid: (message: string) => void;
 }) {
+  const isGroup = (sale?.movements.length ?? 0) > 1;
+  const singleMovement = !isGroup ? sale?.movements[0] : undefined;
   const [seller, setSeller] = useState<(typeof VENDORS)[number]>("Julian");
   const [payment, setPayment] = useState<(typeof PAYMENT_METHODS)[number]>("Mercado Pago");
   const [customer, setCustomer] = useState("");
@@ -2101,15 +2151,17 @@ function SaleEditModal({
   const [unitPrice, setUnitPrice] = useState("");
   const [lineTotal, setLineTotal] = useState("");
   const [unitCost, setUnitCost] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
-  const product = sale?.productId ? products.find((item) => item.id === sale.productId) : undefined;
-  const quantity = sale?.quantity ?? 1;
+  const product = singleMovement?.productId ? products.find((item) => item.id === singleMovement.productId) : undefined;
+  const quantity = singleMovement?.quantity ?? 1;
   const parsedUnitPrice = parseOptionalPrice(unitPrice);
   const parsedLineTotal = parseOptionalPrice(lineTotal);
   const parsedUnitCost = parseOptionalPrice(unitCost);
-  const effectiveUnitPrice = parsedUnitPrice ?? (sale ? saleUnitPrice(sale) : 0);
+  const effectiveUnitPrice = parsedUnitPrice ?? (singleMovement ? saleUnitPrice(singleMovement) : 0);
   const effectiveLineTotal = parsedLineTotal ?? effectiveUnitPrice * quantity;
-  const effectiveUnitCost = parsedUnitCost ?? (sale ? saleUnitCost(sale, product) : product?.cost ?? 0);
+  const effectiveUnitCost = parsedUnitCost ?? (singleMovement ? saleUnitCost(singleMovement, product) : product?.cost ?? 0);
   const estimatedProfit = (effectiveUnitPrice - effectiveUnitCost) * quantity;
 
   useEffect(() => {
@@ -2122,39 +2174,60 @@ function SaleEditModal({
     );
     setCustomer(sale.customer ?? "");
     setDate(sale.date);
-    setStatus(saleStatus(sale));
-    setPaymentStatus(salePaymentStatus(sale));
-    const currentUnitPrice = saleUnitPrice(sale);
-    const currentUnitCost = saleUnitCost(sale, product);
-    setUnitPrice(String(Math.round(currentUnitPrice)));
-    setLineTotal(String(Math.round(sale.amount)));
-    setUnitCost(String(Math.round(currentUnitCost)));
-  }, [sale, product]);
+    setStatus(sale.status);
+    setPaymentStatus(sale.paymentStatus);
+    submittingRef.current = false;
+    setSubmitting(false);
+    if (singleMovement) {
+      const currentUnitPrice = saleUnitPrice(singleMovement);
+      const currentUnitCost = saleUnitCost(singleMovement, product);
+      setUnitPrice(String(Math.round(currentUnitPrice)));
+      setLineTotal(String(Math.round(singleMovement.amount)));
+      setUnitCost(String(Math.round(currentUnitCost)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sale]);
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!parsedUnitPrice) {
-      onInvalid("Ingresá un precio de venta válido");
-      return;
+    if (submittingRef.current) return;
+
+    if (!isGroup) {
+      if (!parsedUnitPrice) {
+        onInvalid("Ingresá un precio de venta válido");
+        return;
+      }
+      if (!parsedUnitCost) {
+        onInvalid("Ingresá un costo válido");
+        return;
+      }
     }
-    if (!parsedUnitCost) {
-      onInvalid("Ingresá un costo válido");
-      return;
+
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        seller,
+        payment,
+        customer: customer.trim(),
+        date,
+        status,
+        paymentStatus,
+        ...(isGroup ? {} : { unitPrice: parsedUnitPrice ?? undefined, unitCost: parsedUnitCost ?? undefined }),
+      });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
-    onSubmit({
-      seller,
-      payment,
-      customer: customer.trim(),
-      date,
-      status,
-      paymentStatus,
-      unitPrice: parsedUnitPrice,
-      unitCost: parsedUnitCost,
-    });
   }
 
   return (
-    <Modal open={Boolean(sale)} title="Editar venta" subtitle={sale?.detail} onClose={onClose}>
+    <Modal
+      open={Boolean(sale)}
+      title="Editar venta"
+      subtitle={isGroup ? `${sale?.movements.length} productos` : singleMovement?.detail}
+      onClose={onClose}
+    >
       <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
         <Input label="Cliente (opcional)" value={customer} onChange={(event) => setCustomer(event.target.value)} />
         <div className="grid gap-4 sm:grid-cols-2">
@@ -2163,9 +2236,22 @@ function SaleEditModal({
             {VENDORS.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
           </Select>
         </div>
-        {sale?.productId ? (
+        {isGroup ? (
+          <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Productos de esta venta</p>
+            {sale?.movements.map((movement) => (
+              <div key={movement.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-700">{saleProductLabel(movement, products)}</span>
+                <span className="font-medium">{currency(movement.amount)}</span>
+              </div>
+            ))}
+            <p className="text-xs text-slate-500">
+              Para cambiar el precio de un producto puntual, eliminá esta venta y volvé a cargarla.
+            </p>
+          </div>
+        ) : singleMovement?.productId ? (
           <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-sm font-medium text-slate-700">{saleProductLabel(sale, products)}</p>
+            <p className="text-sm font-medium text-slate-700">{saleProductLabel(singleMovement, products)}</p>
             <div className="grid gap-4 sm:grid-cols-3">
               <Input
                 label="Precio unitario"
@@ -2235,8 +2321,11 @@ function SaleEditModal({
           </Select>
         </div>
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button type="submit">Guardar cambios</Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>Cancelar</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {submitting ? "Guardando..." : "Guardar cambios"}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -2353,6 +2442,8 @@ function ProductModal({
     stock: "",
   });
   const [imageError, setImageError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     setForm({
@@ -2366,6 +2457,8 @@ function ProductModal({
       stock: product ? String(product.stock) : "",
     });
     setImageError("");
+    submittingRef.current = false;
+    setSubmitting(false);
   }, [product, open]);
 
   async function handleImageFile(file?: File) {
@@ -2384,19 +2477,27 @@ function ProductModal({
     setImageError("");
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    onSubmit({
-      name: form.name.trim(),
-      brand: form.brand.trim(),
-      location: normalizeLocation(form.location),
-      imageUrl: form.imageUrl.trim() || undefined,
-      cost: toPositiveNumber(form.cost),
-      price: toPositiveNumber(form.price),
-      wholesalePrice: product?.wholesalePrice ?? null,
-      stock: toNonNegativeInteger(form.stock),
-      minStock: product?.minStock ?? LOW_STOCK_LIMIT,
-    });
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        name: form.name.trim(),
+        brand: form.brand.trim(),
+        location: normalizeLocation(form.location),
+        imageUrl: form.imageUrl.trim() || undefined,
+        cost: toPositiveNumber(form.cost),
+        price: toPositiveNumber(form.price),
+        wholesalePrice: product?.wholesalePrice ?? null,
+        stock: toNonNegativeInteger(form.stock),
+        minStock: product?.minStock ?? LOW_STOCK_LIMIT,
+      });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -2435,8 +2536,11 @@ function ProductModal({
           </div>
         </div>
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button type="submit">{product ? "Guardar" : "Crear"}</Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>Cancelar</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {submitting ? "Guardando..." : product ? "Guardar" : "Crear"}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -2489,11 +2593,46 @@ async function confirmDelete(product: Product, deleteProduct: (id: string) => Pr
   notify({ type: "success", title: "Producto eliminado", message: product.name });
 }
 
-async function removeSale(sale: Movement, deleteMovement: (id: string) => Promise<void>, notify: Notify) {
-  const ok = window.confirm("Eliminar esta venta? El stock se devuelve automaticamente.");
+async function removeSale(sale: SaleGroup, deleteMovement: (ids: string[]) => Promise<void>, notify: Notify) {
+  const confirmMessage =
+    sale.ids.length > 1
+      ? "Eliminar esta venta con varios productos? El stock se devuelve automaticamente."
+      : "Eliminar esta venta? El stock se devuelve automaticamente.";
+  const ok = window.confirm(confirmMessage);
   if (!ok) return;
-  await deleteMovement(sale.id);
+  await deleteMovement(sale.ids);
   notify({ type: "success", title: "Venta eliminada", message: "El stock fue devuelto" });
+}
+
+function buildSaleGroups(sales: Movement[]): SaleGroup[] {
+  const groups = new Map<string, Movement[]>();
+  for (const sale of sales) {
+    const key = sale.groupId ?? sale.id;
+    const list = groups.get(key);
+    if (list) list.push(sale);
+    else groups.set(key, [sale]);
+  }
+
+  return Array.from(groups.entries()).map(([key, movements]) => {
+    const first = movements[0];
+    return {
+      id: key,
+      ids: movements.map((movement) => movement.id),
+      movements,
+      date: first.date,
+      seller: first.seller,
+      payment: first.payment,
+      customer: first.customer,
+      status: saleStatus(first),
+      paymentStatus: salePaymentStatus(first),
+      amount: movements.reduce((sum, movement) => sum + movement.amount, 0),
+      profit: movements.reduce((sum, movement) => sum + movement.profit, 0),
+    };
+  });
+}
+
+function saleGroupProductLabel(group: SaleGroup, products: Product[]) {
+  return group.movements.map((movement) => saleProductLabel(movement, products)).join(", ");
 }
 
 function saleStatus(movement: Movement): SaleStatus {
