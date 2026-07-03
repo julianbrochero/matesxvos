@@ -513,6 +513,12 @@ function DashboardView({ setView }: { setView: (view: View) => void }) {
         <SummaryCard label="Ventas" value={currency(metrics.sales)} />
       </div>
 
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <SummaryCard label="Ganancia de hoy" value={currency(metrics.profitToday)} tone="ok" />
+        <SummaryCard label="Ganancia del mes" value={currency(metrics.profitMonth)} tone="ok" />
+        <SummaryCard label="Plata en stock" value={currency(metrics.stockValue)} />
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
         <Panel title="Stock bajo" subtitle="Productos para revisar">
           <div className="divide-y divide-slate-100">
@@ -3059,9 +3065,18 @@ function handleFormKeyboardNavigation(event: KeyboardEvent<HTMLFormElement>) {
 
 function getMetrics(products: Product[], movements: Movement[]) {
   const sales = movements.filter((movement) => movement.type === "venta");
+  const todayDate = today();
+  const monthPrefix = todayDate.slice(0, 7);
+  const salesToday = sales.filter((movement) => movement.date === todayDate);
+  const salesMonth = sales.filter((movement) => movement.date.slice(0, 7) === monthPrefix);
+
   return {
     stock: products.reduce((sum, product) => sum + product.stock, 0),
+    stockValue: products.reduce((sum, product) => sum + product.stock * product.cost, 0),
     sales: sales.reduce((sum, movement) => sum + movement.amount, 0),
+    profit: sales.reduce((sum, movement) => sum + movement.profit, 0),
+    profitToday: salesToday.reduce((sum, movement) => sum + movement.profit, 0),
+    profitMonth: salesMonth.reduce((sum, movement) => sum + movement.profit, 0),
   };
 }
 
