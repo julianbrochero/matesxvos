@@ -101,6 +101,7 @@ function localAddProduct(product: ProductInput, state: StockState) {
         amount: 0,
         profit: 0,
         date: today(),
+        location: product.location,
       },
       ...state.movements,
     ],
@@ -119,6 +120,7 @@ function localUpdateProduct(productId: string, product: ProductInput, state: Sto
         amount: 0,
         profit: 0,
         date: today(),
+        location: product.location,
       },
       ...state.movements,
     ],
@@ -126,6 +128,7 @@ function localUpdateProduct(productId: string, product: ProductInput, state: Sto
 }
 
 function localUpdateStock(productId: string, stock: number, state: StockState) {
+  const product = state.products.find((item) => item.id === productId);
   return {
     products: state.products.map((item) => (item.id === productId ? { ...item, stock } : item)),
     movements: [
@@ -137,6 +140,7 @@ function localUpdateStock(productId: string, stock: number, state: StockState) {
         amount: 0,
         profit: 0,
         date: today(),
+        location: product?.location,
       },
       ...state.movements,
     ],
@@ -163,6 +167,7 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
         amount: total,
         profit: 0,
         date,
+        location: product.location,
       },
       ...state.movements,
     ],
@@ -216,6 +221,7 @@ function localRegisterSale(
       status,
       paymentStatus,
       groupId,
+      location: product?.location,
     });
   });
 

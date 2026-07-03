@@ -21,6 +21,7 @@ import {
   Search,
   ShoppingBag,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -85,11 +86,11 @@ const navItems: { id: View; label: string; short: string; icon: typeof Boxes; ac
   { id: "listas", label: "Listas", short: "Listas", icon: Download, accent: "violet" },
 ];
 
-const NAV_ACCENTS: Record<NavAccent, { soft: string; text: string; darkBg: string; darkText: string }> = {
-  sky: { soft: "bg-sky-50", text: "text-sky-700", darkBg: "bg-sky-500/15", darkText: "text-sky-300" },
-  emerald: { soft: "bg-emerald-50", text: "text-emerald-700", darkBg: "bg-emerald-500/15", darkText: "text-emerald-300" },
-  amber: { soft: "bg-amber-50", text: "text-amber-700", darkBg: "bg-amber-400/20", darkText: "text-amber-300" },
-  violet: { soft: "bg-violet-50", text: "text-violet-700", darkBg: "bg-violet-500/15", darkText: "text-violet-300" },
+const NAV_ACCENTS: Record<NavAccent, { soft: string; text: string }> = {
+  sky: { soft: "bg-sky-50", text: "text-sky-700" },
+  emerald: { soft: "bg-emerald-50", text: "text-emerald-700" },
+  amber: { soft: "bg-amber-50", text: "text-amber-700" },
+  violet: { soft: "bg-violet-50", text: "text-violet-700" },
 };
 
 export default function Home() {
@@ -240,26 +241,30 @@ function AppShell({
   }
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
-      <aside className="hidden w-64 shrink-0 border-r border-white/5 bg-slate-950 p-4 text-white lg:block">
-        <Brand inverse />
-        <nav className="mt-6 grid gap-1">
-          {navItems.map((item) => (
-            <NavButton key={item.id} item={item} active={view === item.id} onClick={() => setView(item.id)} />
-          ))}
-        </nav>
-        <Button
-          className="mt-6 w-full justify-start text-white/55 hover:bg-white/5 hover:text-white"
-          variant="ghost"
-          onClick={() => void logout()}
-        >
-          <LogOut className="h-4 w-4" />
-          Salir
-        </Button>
+    <div className="mx-auto flex min-h-screen w-full max-w-[1440px] bg-slate-50">
+      <aside className="hidden w-64 shrink-0 p-3 lg:block">
+        <div className="sticky top-3 flex h-[calc(100vh-1.5rem)] flex-col rounded-[28px] border border-slate-200/60 bg-white/90 p-4 shadow-premium backdrop-blur-xl">
+          <Brand />
+          <nav className="mt-6 grid gap-1">
+            {navItems.map((item) => (
+              <NavButton key={item.id} item={item} active={view === item.id} onClick={() => setView(item.id)} />
+            ))}
+          </nav>
+          <div className="mt-auto border-t border-slate-200/70 pt-3">
+            <Button
+              className="w-full justify-start text-slate-500 hover:bg-red-50 hover:text-red-600"
+              variant="ghost"
+              onClick={() => void logout()}
+            >
+              <LogOut className="h-4 w-4" />
+              Salir
+            </Button>
+          </div>
+        </div>
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
+        <header className="sticky top-0 z-40 bg-slate-50/80 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex items-center gap-3">
               <div className="lg:hidden">
@@ -336,23 +341,18 @@ function LocationSwitcher({ fullWidth }: { fullWidth?: boolean }) {
   );
 }
 
-function Brand({ compact, inverse }: { compact?: boolean; inverse?: boolean }) {
+function Brand({ compact }: { compact?: boolean }) {
   return (
-    <div className="min-w-0">
-      <p
-        className={cn(
-          "truncate font-semibold tracking-tight",
-          compact ? "text-base" : "text-lg",
-          inverse ? "text-white" : "text-slate-950",
-        )}
-      >
-        Mates x Vos
-      </p>
-      {!compact ? (
-        <p className={cn("text-xs", inverse ? "text-white/45" : "text-slate-500")}>
-          Inventario por sucursal
+    <div className="flex min-w-0 items-center gap-2.5">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 text-sm font-bold text-white shadow-card">
+        M
+      </div>
+      <div className="min-w-0">
+        <p className={cn("truncate font-semibold tracking-tight text-slate-950", compact ? "text-base" : "text-[15px]")}>
+          Mates x Vos
         </p>
-      ) : null}
+        {!compact ? <p className="truncate text-xs text-slate-500">Inventario por sucursal</p> : null}
+      </div>
     </div>
   );
 }
@@ -373,11 +373,11 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-all duration-150",
-        active ? cn("bg-white/10 text-white") : "text-white/55 hover:bg-white/5 hover:text-white/90",
+        "flex h-10 items-center gap-3 rounded-2xl px-3 text-sm font-medium transition-all duration-150",
+        active ? cn(accent.soft, accent.text, "shadow-sm") : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
       )}
     >
-      <Icon className={cn("h-4 w-4", active && accent.darkText)} />
+      <Icon className="h-4 w-4" />
       {item.label}
     </button>
   );
@@ -407,7 +407,7 @@ function MobileMenuSheet({
             onClick={onClose}
           />
           <motion.div
-            className="absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-slate-200/70 bg-white p-4 shadow-premium"
+            className="absolute inset-x-0 bottom-0 rounded-t-[32px] border-t border-slate-200/70 bg-white p-4 shadow-premium"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -436,7 +436,7 @@ function MobileMenuSheet({
                       onClose();
                     }}
                     className={cn(
-                      "flex h-12 items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors duration-150",
+                      "flex h-12 items-center gap-3 rounded-2xl px-3 text-[15px] font-medium transition-colors duration-150",
                       active ? cn(accent.soft, accent.text) : "text-slate-700 hover:bg-slate-100",
                     )}
                   >
@@ -455,7 +455,7 @@ function MobileMenuSheet({
             <button
               type="button"
               onClick={onLogout}
-              className="flex h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium text-red-600 transition-colors duration-150 hover:bg-red-50"
+              className="flex h-12 w-full items-center gap-3 rounded-2xl px-3 text-[15px] font-medium text-red-600 transition-colors duration-150 hover:bg-red-50"
             >
               <LogOut className="h-5 w-5" />
               Salir
@@ -515,6 +515,12 @@ function DashboardView({ setView }: { setView: (view: View) => void }) {
         <SummaryCard label="Ventas" value={currency(metrics.sales)} />
       </div>
 
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <SummaryCard label="Ganancia de hoy" value={currency(metrics.profitToday)} tone="ok" />
+        <SummaryCard label="Ganancia del mes" value={currency(metrics.profitMonth)} tone="ok" />
+        <SummaryCard label="Plata en stock" value={currency(metrics.stockValue)} />
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
         <Panel title="Stock bajo" subtitle="Productos para revisar">
           <div className="divide-y divide-slate-100">
@@ -547,7 +553,7 @@ function StockView() {
   const updateStock = useStockStore((state) => state.updateStock);
   const notify = useAlertStore((state) => state.notify);
   const locationFilter = useLocationFilterStore((state) => state.locationFilter);
-  const [activeTab, setActiveTab] = useState<"inventario" | "carga">("inventario");
+  const [activeTab, setActiveTab] = useState<"inventario" | "carga" | "importar">("inventario");
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState("todos");
   const [editing, setEditing] = useState<Product | null>(null);
@@ -592,6 +598,16 @@ function StockView() {
             >
               Cargar stock
             </button>
+            <button
+              type="button"
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+                activeTab === "importar" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
+              )}
+              onClick={() => setActiveTab("importar")}
+            >
+              Importar
+            </button>
           </div>
           {activeTab === "inventario" ? (
             <Button onClick={() => setModalOpen(true)}>
@@ -604,6 +620,8 @@ function StockView() {
 
       {activeTab === "carga" ? (
         <StockLoadTab />
+      ) : activeTab === "importar" ? (
+        <ImportProductsTab />
       ) : (
         <>
       <Panel>
@@ -996,6 +1014,15 @@ function SalesView() {
     setActionMenuId("");
   }
 
+  async function downloadReceipt(sale: SaleGroup) {
+    setActionMenuId("");
+    try {
+      await downloadSaleReceiptPdf(sale, products, movementLocation(sale.movements[0], products));
+    } catch {
+      notify({ type: "error", title: "No pudimos generar el recibo", message: "Intentá de nuevo en unos segundos" });
+    }
+  }
+
   return (
     <section className="grid gap-5">
       <PageHeader
@@ -1082,6 +1109,7 @@ function SalesView() {
                         setActionMenuId("");
                         void removeSale(sale, deleteMovement, notify);
                       }}
+                      onDownloadReceipt={() => void downloadReceipt(sale)}
                     />
                   </div>
                 </td>
@@ -1106,6 +1134,7 @@ function SalesView() {
               setActionMenuId("");
               void removeSale(sale, deleteMovement, notify);
             }}
+            onDownloadReceipt={() => void downloadReceipt(sale)}
             onStatusChange={(nextStatus) => void changeSaleStatus(sale, nextStatus)}
             onPaymentStatusChange={(nextPaymentStatus) => void changeSalePaymentStatus(sale, nextPaymentStatus)}
           />
@@ -1375,6 +1404,310 @@ function StockLoadTab() {
         <ActivityList movements={purchases} />
       </Panel>
     </section>
+  );
+}
+
+type ImportedProductRow = {
+  name: string;
+  brand: string;
+  cost: number;
+  price: number;
+  stock: number;
+  imageUrl?: string;
+  include: boolean;
+};
+
+const IMPORT_FIELD_ALIASES: Record<"name" | "brand" | "cost" | "price" | "promoPrice" | "stock" | "imageUrl", string[]> = {
+  name: ["nombre", "nombre del producto", "producto", "name", "title", "titulo"],
+  brand: ["marca", "proveedor", "categorias", "categoria", "brand"],
+  cost: ["costo", "cost"],
+  price: ["precio", "price"],
+  promoPrice: ["precio promocional", "precio de oferta", "precio comparativo", "precio final", "promotional price", "compare at price"],
+  stock: ["stock", "cantidad", "cantidades", "existencias", "quantity"],
+  imageUrl: ["imagen 1", "imagen", "imagen url", "imagen url 1", "imagen src", "foto", "image", "image 1", "image src"],
+};
+
+function normalizeHeaderText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+function parseDelimitedText(text: string): string[][] {
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
+  const delimiter = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized[i];
+    if (inQuotes) {
+      if (char === '"') {
+        if (normalized[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === delimiter) {
+      row.push(field);
+      field = "";
+    } else if (char === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += char;
+    }
+  }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows.filter((cells) => cells.some((cell) => cell.trim().length > 0));
+}
+
+function parsePriceValue(raw: string): number {
+  const trimmed = raw.trim();
+  if (!trimmed) return 0;
+  const hasComma = trimmed.includes(",");
+  const hasDot = trimmed.includes(".");
+  let normalized = trimmed.replace(/[^0-9.,-]/g, "");
+  if (hasComma && hasDot) {
+    normalized = normalized.replace(/\./g, "").replace(",", ".");
+  } else if (hasComma) {
+    normalized = normalized.replace(",", ".");
+  }
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function parseTiendaNubeCsv(text: string): { rows: ImportedProductRow[]; skipped: number } {
+  const table = parseDelimitedText(text);
+  if (table.length < 2) return { rows: [], skipped: 0 };
+
+  const headers = table[0].map(normalizeHeaderText);
+  const columnIndex: Partial<Record<keyof typeof IMPORT_FIELD_ALIASES, number>> = {};
+
+  (Object.keys(IMPORT_FIELD_ALIASES) as (keyof typeof IMPORT_FIELD_ALIASES)[]).forEach((field) => {
+    const aliases = IMPORT_FIELD_ALIASES[field];
+    const index = headers.findIndex((header) => aliases.includes(header));
+    if (index !== -1) columnIndex[field] = index;
+  });
+
+  const rows: ImportedProductRow[] = [];
+  let skipped = 0;
+
+  for (const cells of table.slice(1)) {
+    const cell = (field: keyof typeof IMPORT_FIELD_ALIASES) => {
+      const index = columnIndex[field];
+      return index === undefined ? "" : (cells[index] ?? "").trim();
+    };
+
+    const name = cell("name");
+    const price = parsePriceValue(cell("price"));
+    if (!name || price <= 0) {
+      if (name || price) skipped++;
+      continue;
+    }
+
+    const promoPrice = parsePriceValue(cell("promoPrice"));
+    const cost = parsePriceValue(cell("cost"));
+    const stock = Math.max(0, Math.round(parsePriceValue(cell("stock"))));
+    const brand = cell("brand") || name;
+    const imageUrl = cell("imageUrl");
+
+    rows.push({
+      name,
+      brand,
+      cost: cost > 0 ? cost : Math.round(price * 0.6),
+      price: promoPrice > 0 ? promoPrice : price,
+      stock,
+      imageUrl: imageUrl || undefined,
+      include: true,
+    });
+  }
+
+  return { rows, skipped };
+}
+
+function ImportProductsTab() {
+  const addProduct = useStockStore((state) => state.addProduct);
+  const notify = useAlertStore((state) => state.notify);
+  const [location, setLocation] = useState<LocationName>("Buenos Aires");
+  const [rows, setRows] = useState<ImportedProductRow[]>([]);
+  const [skipped, setSkipped] = useState(0);
+  const [fileName, setFileName] = useState("");
+  const [importing, setImporting] = useState(false);
+
+  async function handleFile(file?: File) {
+    if (!file) return;
+    const text = await file.text();
+    const parsed = parseTiendaNubeCsv(text);
+    setRows(parsed.rows);
+    setSkipped(parsed.skipped);
+    setFileName(file.name);
+
+    if (!parsed.rows.length) {
+      notify({
+        type: "warning",
+        title: "No se encontraron productos",
+        message: "Revisá que el CSV tenga columnas de Nombre y Precio.",
+      });
+    }
+  }
+
+  function toggleRow(index: number) {
+    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, include: !row.include } : row)));
+  }
+
+  function updateRowField(index: number, field: "cost" | "price" | "stock", value: string) {
+    const parsed = Number(value);
+    setRows((current) =>
+      current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: Number.isFinite(parsed) ? parsed : 0 } : row)),
+    );
+  }
+
+  async function confirmImport() {
+    const selected = rows.filter((row) => row.include);
+    if (!selected.length) {
+      notify({ type: "warning", title: "Seleccioná al menos un producto para importar" });
+      return;
+    }
+
+    setImporting(true);
+    let created = 0;
+    try {
+      for (const row of selected) {
+        await addProduct({
+          name: row.name,
+          brand: row.brand,
+          location,
+          imageUrl: row.imageUrl,
+          cost: row.cost > 0 ? row.cost : 1,
+          price: row.price,
+          wholesalePrice: null,
+          stock: row.stock,
+          minStock: LOW_STOCK_LIMIT,
+        });
+        created++;
+      }
+      notify({ type: "success", title: "Importación completa", message: `${created} productos creados en ${location}` });
+      setRows([]);
+      setFileName("");
+      setSkipped(0);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-5">
+      <Panel title="Importar desde Tienda Nube" subtitle="Subí el CSV exportado desde tu panel de Tienda Nube.">
+        <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
+          <Input label="Archivo CSV" type="file" accept=".csv,text/csv" onChange={(event) => void handleFile(event.target.files?.[0])} />
+          <Select label="Ubicacion para lo importado" value={location} onChange={(event) => setLocation(event.target.value as LocationName)}>
+            {LOCATIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          </Select>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          Reconoce las columnas Nombre, Costo, Precio, Precio promocional, Stock e Imagen. Si hay precio promocional, se usa como precio final de venta.
+        </p>
+      </Panel>
+
+      {rows.length ? (
+        <Panel
+          title={`Vista previa · ${fileName}`}
+          subtitle={`${rows.filter((row) => row.include).length} de ${rows.length} productos seleccionados${skipped ? ` · ${skipped} filas omitidas por falta de nombre o precio` : ""}`}
+        >
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-slate-50/80 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2"></th>
+                  <th className="px-3 py-2">Foto</th>
+                  <th className="px-3 py-2">Producto</th>
+                  <th className="px-3 py-2">Costo</th>
+                  <th className="px-3 py-2">Precio final</th>
+                  <th className="px-3 py-2">Stock</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((row, index) => (
+                  <tr key={`${row.name}-${index}`} className={cn(!row.include && "opacity-40")}>
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={row.include}
+                        onChange={() => toggleRow(index)}
+                        aria-label={`Incluir ${row.name}`}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                        {row.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img className="h-full w-full object-cover" src={row.imageUrl} alt="" />
+                        ) : (
+                          <ImageIcon className="h-4 w-4 text-slate-400" />
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 font-medium">{row.name}</td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={row.cost}
+                        onChange={(event) => updateRowField(index, "cost", event.target.value)}
+                        className="h-9 w-24 rounded-lg border border-slate-200 px-2 text-sm outline-none focus:border-teal-500/60"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={row.price}
+                        onChange={(event) => updateRowField(index, "price", event.target.value)}
+                        className="h-9 w-24 rounded-lg border border-slate-200 px-2 text-sm outline-none focus:border-teal-500/60"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={row.stock}
+                        onChange={(event) => updateRowField(index, "stock", event.target.value)}
+                        className="h-9 w-20 rounded-lg border border-slate-200 px-2 text-sm outline-none focus:border-teal-500/60"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button onClick={() => void confirmImport()} disabled={importing}>
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {importing ? "Importando..." : `Importar ${rows.filter((row) => row.include).length} productos`}
+            </Button>
+          </div>
+        </Panel>
+      ) : null}
+    </div>
   );
 }
 
@@ -2040,6 +2373,7 @@ function SaleCard({
   onActionMenuToggle,
   onEdit,
   onDelete,
+  onDownloadReceipt,
   onStatusChange,
   onPaymentStatusChange,
 }: {
@@ -2050,6 +2384,7 @@ function SaleCard({
   onActionMenuToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onDownloadReceipt: () => void;
   onStatusChange: (status: SaleStatus) => void;
   onPaymentStatusChange: (paymentStatus: SalePaymentStatus) => void;
 }) {
@@ -2079,7 +2414,13 @@ function SaleCard({
             <p className="shrink-0 font-semibold">{currency(sale.amount)}</p>
             <p className="text-xs font-semibold text-emerald-700">Ganancia {currency(sale.profit)}</p>
           </div>
-          <SaleActionMenu open={actionMenuOpen} onToggle={onActionMenuToggle} onEdit={onEdit} onDelete={onDelete} />
+          <SaleActionMenu
+            open={actionMenuOpen}
+            onToggle={onActionMenuToggle}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onDownloadReceipt={onDownloadReceipt}
+          />
         </div>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -2095,11 +2436,13 @@ function SaleActionMenu({
   onToggle,
   onEdit,
   onDelete,
+  onDownloadReceipt,
 }: {
   open: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onDownloadReceipt: () => void;
 }) {
   return (
     <div className="relative">
@@ -2107,7 +2450,15 @@ function SaleActionMenu({
         <MoreVertical className="h-4 w-4" />
       </Button>
       {open ? (
-        <div className="absolute right-0 top-11 z-20 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
+        <div className="absolute right-0 top-11 z-20 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
+          <button
+            type="button"
+            onClick={onDownloadReceipt}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+          >
+            <Download className="h-4 w-4" />
+            Descargar recibo
+          </button>
           <button
             type="button"
             onClick={onEdit}
@@ -2743,6 +3094,7 @@ function movementMatchesLocation(movement: Movement, products: Product[], filter
 }
 
 function movementLocation(movement: Movement, products: Product[]) {
+  if (movement.location) return normalizeLocation(movement.location);
   const product = products.find((item) => item.id === movement.productId);
   return product ? productLocation(product) : LOCATIONS[0];
 }
@@ -2805,9 +3157,18 @@ function handleFormKeyboardNavigation(event: KeyboardEvent<HTMLFormElement>) {
 
 function getMetrics(products: Product[], movements: Movement[]) {
   const sales = movements.filter((movement) => movement.type === "venta");
+  const todayDate = today();
+  const monthPrefix = todayDate.slice(0, 7);
+  const salesToday = sales.filter((movement) => movement.date === todayDate);
+  const salesMonth = sales.filter((movement) => movement.date.slice(0, 7) === monthPrefix);
+
   return {
     stock: products.reduce((sum, product) => sum + product.stock, 0),
+    stockValue: products.reduce((sum, product) => sum + product.stock * product.cost, 0),
     sales: sales.reduce((sum, movement) => sum + movement.amount, 0),
+    profit: sales.reduce((sum, movement) => sum + movement.profit, 0),
+    profitToday: salesToday.reduce((sum, movement) => sum + movement.profit, 0),
+    profitMonth: salesMonth.reduce((sum, movement) => sum + movement.profit, 0),
   };
 }
 
@@ -3008,6 +3369,138 @@ async function downloadPricePdf(products: (Product & { quantity?: number })[], m
   } else {
     doc.save(`mates-x-vos-${isWholesale ? "mayorista" : "precios"}-${today()}.pdf`);
   }
+}
+
+async function downloadSaleReceiptPdf(sale: SaleGroup, products: Product[], location: string) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const receiptNumber = sale.id.replace(/[^a-zA-Z0-9]/g, "").slice(-8).toUpperCase();
+
+  // Top header color accent bar (Teal)
+  doc.setFillColor(13, 148, 136);
+  doc.rect(0, 0, pageWidth, 6, "F");
+
+  // Logo / Business name
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(24);
+  doc.text("Mates x Vos", 40, 48);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Mates, bombillas y accesorios premium", 40, 62);
+
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Instagram: @matesxvos", pageWidth - 180, 38);
+  doc.text("WhatsApp: +54 9 353 479-6992", pageWidth - 180, 50);
+  doc.text(`Ubicación: ${location}`, pageWidth - 180, 62);
+
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(1);
+  doc.line(40, 76, pageWidth - 40, 76);
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("COMPROBANTE DE VENTA", 40, 98);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`N° ${receiptNumber}`, 40, 113);
+  doc.text(`Fecha: ${sale.date}`, pageWidth - 180, 98);
+  doc.text(
+    `${sale.status === "encargado" ? "Encargado" : "Entregado"} · ${sale.paymentStatus === "pagado" ? "Pagado" : "No pagado"}`,
+    pageWidth - 180,
+    113,
+  );
+
+  const infoY = 138;
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(40, infoY, pageWidth - 80, 56, 6, 6, "FD");
+
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Cliente", 56, infoY + 18);
+  doc.text("Vendedor", 56, infoY + 38);
+  doc.text("Forma de pago", pageWidth / 2 + 10, infoY + 18);
+  doc.text("Ubicación", pageWidth / 2 + 10, infoY + 38);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(sale.customer?.trim() || "Consumidor final", 56, infoY + 30);
+  doc.text(sale.seller || "-", 56, infoY + 50);
+  doc.text(sale.payment || "-", pageWidth / 2 + 10, infoY + 30);
+  doc.text(location, pageWidth / 2 + 10, infoY + 50);
+
+  const startY = infoY + 76;
+  const bodyData = sale.movements.map((movement) => {
+    const product = products.find((item) => item.id === movement.productId);
+    const quantity = movement.quantity ?? 1;
+    return [
+      product?.name ?? saleProductLabel(movement, products),
+      String(quantity),
+      currency(saleUnitPrice(movement)),
+      currency(movement.amount),
+    ];
+  });
+
+  autoTable(doc, {
+    startY,
+    head: [["Producto", "Cant.", "Precio unit.", "Subtotal"]],
+    body: bodyData,
+    margin: { left: 40, right: 40 },
+    theme: "striped",
+    styles: {
+      cellPadding: 8,
+      font: "helvetica",
+      fontSize: 10,
+      lineColor: [241, 245, 249],
+      lineWidth: 0.5,
+      textColor: [51, 65, 85],
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: [15, 23, 42],
+      fontStyle: "bold",
+      textColor: [255, 255, 255],
+      fontSize: 10,
+    },
+    columnStyles: {
+      0: { cellWidth: "auto" },
+      1: { cellWidth: 60, halign: "center" },
+      2: { cellWidth: 100, halign: "right" },
+      3: { cellWidth: 100, halign: "right", fontStyle: "bold" },
+    },
+    didDrawPage: (data: any) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.text("Comprobante interno, no válido como factura. Gracias por tu compra.", 40, pageHeight - 25);
+      doc.text(`Página ${data.pageNumber}`, pageWidth - 70, pageHeight - 25);
+    },
+  });
+
+  const finalY = (doc as any).lastAutoTable.finalY || startY;
+
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(204, 251, 241);
+  doc.rect(pageWidth - 220, finalY + 15, 180, 40, "FD");
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("TOTAL:", pageWidth - 210, finalY + 28);
+  doc.setTextColor(13, 148, 136);
+  doc.setFontSize(14);
+  doc.text(currency(sale.amount), pageWidth - 210, finalY + 45);
+
+  doc.save(`mates-x-vos-recibo-${receiptNumber}.pdf`);
 }
 
 async function loadProductImages(products: (Product & { quantity?: number })[]) {

@@ -68,6 +68,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     amount: 0,
     profit: 0,
     date: today(),
+    location: data.location,
   });
 
   return NextResponse.json(mapProduct(data));

@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     amount: 0,
     profit: 0,
     date: today(),
+    location: parsed.data.location,
   });
 
   return NextResponse.json(mapProduct(data), { status: 201 });
