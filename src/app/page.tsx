@@ -633,7 +633,7 @@ function StockView() {
         </div>
       </Panel>
 
-      <StockLocationReference />
+      {locationFilter === "todos" ? <StockLocationReference /> : null}
 
       <div className="hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-card md:block">
         <table className="w-full border-collapse text-left text-sm">
@@ -642,7 +642,7 @@ function StockView() {
               <th className="px-4 py-3">Foto</th>
               <th className="px-4 py-3">Producto</th>
               <th className="px-4 py-3">Proveedor</th>
-              <th className="px-4 py-3">Ubicacion</th>
+              {locationFilter === "todos" ? <th className="px-4 py-3">Ubicacion</th> : null}
               <th className="px-4 py-3">Stock</th>
               <th className="px-4 py-3">Costo</th>
               <th className="px-4 py-3">Precio</th>
@@ -652,16 +652,24 @@ function StockView() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((product) => (
-              <tr key={product.id} className={cn("transition-colors duration-150", stockLocationRowClass(productLocation(product)))}>
+              <tr
+                key={product.id}
+                className={cn(
+                  "transition-colors duration-150",
+                  locationFilter === "todos" && stockLocationRowClass(productLocation(product)),
+                )}
+              >
                 <td className="px-4 py-3"><ProductThumb product={product} /></td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{product.name}</span>
-                    <LocationBadge location={productLocation(product)} />
+                    {locationFilter === "todos" ? <LocationBadge location={productLocation(product)} /> : null}
                   </div>
                 </td>
                 <td className="px-4 py-3 text-slate-600">{product.brand}</td>
-                <td className="px-4 py-3"><LocationBadge location={productLocation(product)} /></td>
+                {locationFilter === "todos" ? (
+                  <td className="px-4 py-3"><LocationBadge location={productLocation(product)} /></td>
+                ) : null}
                 <td className="px-4 py-3">
                   <StockEditor product={product} onSave={(stock) => void saveStock(product, stock, updateStock, notify)} />
                 </td>
@@ -687,7 +695,13 @@ function StockView() {
 
       <div className="grid gap-3 md:hidden">
         {filtered.map((product) => (
-          <article key={product.id} className={cn("rounded-xl border p-4 shadow-sm", stockLocationCardClass(productLocation(product)))}>
+          <article
+            key={product.id}
+            className={cn(
+              "rounded-xl border p-4 shadow-sm",
+              locationFilter === "todos" ? stockLocationCardClass(productLocation(product)) : "border-slate-200 bg-white",
+            )}
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 gap-3">
                 <ProductThumb product={product} />
@@ -695,7 +709,7 @@ function StockView() {
                   <p className="break-words font-medium">{product.name}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <p className="text-sm text-slate-500">{product.brand}</p>
-                    <LocationBadge location={productLocation(product)} />
+                    {locationFilter === "todos" ? <LocationBadge location={productLocation(product)} /> : null}
                   </div>
                 </div>
               </div>
@@ -1705,7 +1719,7 @@ function RetailPriceList() {
                 <p className="font-medium">{product.name}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <p className="text-sm text-slate-500">{product.brand}</p>
-                  <LocationBadge location={productLocation(product)} />
+                  {locationFilter === "todos" ? <LocationBadge location={productLocation(product)} /> : null}
                 </div>
               </div>
               <p className="font-medium">{currency(product.price)}</p>
@@ -1809,7 +1823,7 @@ function WholesalePriceList() {
                 <p className="font-medium">{product.name}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <p className="text-sm text-slate-500">{product.brand}</p>
-                  <LocationBadge location={productLocation(product)} />
+                  {locationFilter === "todos" ? <LocationBadge location={productLocation(product)} /> : null}
                   <p className="text-sm text-slate-500">{product.stock} u.</p>
                 </div>
               </div>
