@@ -42,7 +42,8 @@ export type PurchaseInput = {
 };
 
 export type SaleLineInput = {
-  productId: string;
+  productId?: string;
+  customName?: string;
   quantity: number;
   unitPrice: number;
   unitCost?: number;

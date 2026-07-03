@@ -317,6 +317,9 @@ declare
   v_item jsonb;
   v_product public.products%rowtype;
   v_product_id uuid;
+  v_custom_name text;
+  v_detail_name text;
+  v_location text;
   v_quantity integer;
   v_unit_price numeric(12, 2);
   v_unit_cost numeric(12, 2);
@@ -336,35 +339,50 @@ begin
 
   for v_item in select * from jsonb_array_elements(p_items)
   loop
-    v_product_id := (v_item->>'productId')::uuid;
+    v_product_id := nullif(v_item->>'productId', '')::uuid;
+    v_custom_name := nullif(trim(coalesce(v_item->>'customName', '')), '');
     v_quantity := (v_item->>'quantity')::integer;
 
     if v_quantity is null or v_quantity <= 0 then
       raise exception 'Cantidad inválida';
     end if;
 
-    select * into v_product from public.products where id = v_product_id for update;
-    if not found then
-      raise exception 'Producto no encontrado';
+    if v_product_id is not null then
+      select * into v_product from public.products where id = v_product_id for update;
+      if not found then
+        raise exception 'Producto no encontrado';
+      end if;
+
+      if v_product.stock < v_quantity then
+        raise exception 'Stock insuficiente: % (disponible % u., pedido % u.)', v_product.name, v_product.stock, v_quantity;
+      end if;
+
+      v_unit_price := coalesce((v_item->>'unitPrice')::numeric, v_product.price);
+      v_unit_cost := coalesce(nullif((v_item->>'unitCost')::numeric, 0), v_product.cost);
+      v_detail_name := v_product.name;
+      v_location := v_product.location;
+
+      update public.products
+      set stock = stock - v_quantity,
+          sold = sold + v_quantity
+      where id = v_product_id;
+    else
+      if v_custom_name is null then
+        raise exception 'El producto personalizado necesita un nombre';
+      end if;
+
+      v_unit_price := (v_item->>'unitPrice')::numeric;
+      v_unit_cost := coalesce((v_item->>'unitCost')::numeric, 0);
+      v_detail_name := v_custom_name;
+      v_location := null;
     end if;
 
-    if v_product.stock < v_quantity then
-      raise exception 'Stock insuficiente: %', v_product.name;
-    end if;
-
-    v_unit_price := coalesce((v_item->>'unitPrice')::numeric, v_product.price);
-    if v_unit_price <= 0 then
+    if v_unit_price is null or v_unit_price <= 0 then
       raise exception 'Precio inválido';
     end if;
 
-    v_unit_cost := coalesce(nullif((v_item->>'unitCost')::numeric, 0), v_product.cost);
     v_amount := v_unit_price * v_quantity;
     v_profit := (v_unit_price - v_unit_cost) * v_quantity;
-
-    update public.products
-    set stock = stock - v_quantity,
-        sold = sold + v_quantity
-    where id = v_product_id;
 
     insert into public.movements (product_id, type, quantity, status, title, detail, amount, profit, date, seller, payment, paid, customer, group_id, location)
     values (
@@ -373,7 +391,7 @@ begin
       v_quantity,
       p_status,
       'Venta registrada',
-      v_quantity || ' ' || v_product.name || ' por ' || p_payment,
+      v_quantity || ' ' || v_detail_name || ' por ' || p_payment,
       v_amount,
       v_profit,
       p_date,
@@ -382,7 +400,7 @@ begin
       coalesce(p_paid, true),
       nullif(trim(coalesce(p_customer, '')), ''),
       v_group_id,
-      v_product.location
+      v_location
     );
 
     v_total_amount := v_total_amount + v_amount;
