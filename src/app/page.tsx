@@ -993,6 +993,15 @@ function SalesView() {
     setActionMenuId("");
   }
 
+  async function downloadReceipt(sale: SaleGroup) {
+    setActionMenuId("");
+    try {
+      await downloadSaleReceiptPdf(sale, products, movementLocation(sale.movements[0], products));
+    } catch {
+      notify({ type: "error", title: "No pudimos generar el recibo", message: "Intentá de nuevo en unos segundos" });
+    }
+  }
+
   return (
     <section className="grid gap-5">
       <PageHeader
@@ -1079,6 +1088,7 @@ function SalesView() {
                         setActionMenuId("");
                         void removeSale(sale, deleteMovement, notify);
                       }}
+                      onDownloadReceipt={() => void downloadReceipt(sale)}
                     />
                   </div>
                 </td>
@@ -1103,6 +1113,7 @@ function SalesView() {
               setActionMenuId("");
               void removeSale(sale, deleteMovement, notify);
             }}
+            onDownloadReceipt={() => void downloadReceipt(sale)}
             onStatusChange={(nextStatus) => void changeSaleStatus(sale, nextStatus)}
             onPaymentStatusChange={(nextPaymentStatus) => void changeSalePaymentStatus(sale, nextPaymentStatus)}
           />
@@ -2313,6 +2324,7 @@ function SaleCard({
   onActionMenuToggle,
   onEdit,
   onDelete,
+  onDownloadReceipt,
   onStatusChange,
   onPaymentStatusChange,
 }: {
@@ -2323,6 +2335,7 @@ function SaleCard({
   onActionMenuToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onDownloadReceipt: () => void;
   onStatusChange: (status: SaleStatus) => void;
   onPaymentStatusChange: (paymentStatus: SalePaymentStatus) => void;
 }) {
@@ -2352,7 +2365,13 @@ function SaleCard({
             <p className="shrink-0 font-semibold">{currency(sale.amount)}</p>
             <p className="text-xs font-semibold text-emerald-700">Ganancia {currency(sale.profit)}</p>
           </div>
-          <SaleActionMenu open={actionMenuOpen} onToggle={onActionMenuToggle} onEdit={onEdit} onDelete={onDelete} />
+          <SaleActionMenu
+            open={actionMenuOpen}
+            onToggle={onActionMenuToggle}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onDownloadReceipt={onDownloadReceipt}
+          />
         </div>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -2368,11 +2387,13 @@ function SaleActionMenu({
   onToggle,
   onEdit,
   onDelete,
+  onDownloadReceipt,
 }: {
   open: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onDownloadReceipt: () => void;
 }) {
   return (
     <div className="relative">
@@ -2380,7 +2401,15 @@ function SaleActionMenu({
         <MoreVertical className="h-4 w-4" />
       </Button>
       {open ? (
-        <div className="absolute right-0 top-11 z-20 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
+        <div className="absolute right-0 top-11 z-20 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
+          <button
+            type="button"
+            onClick={onDownloadReceipt}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+          >
+            <Download className="h-4 w-4" />
+            Descargar recibo
+          </button>
           <button
             type="button"
             onClick={onEdit}
@@ -3277,6 +3306,138 @@ async function downloadPricePdf(products: (Product & { quantity?: number })[], m
   } else {
     doc.save(`mates-x-vos-${isWholesale ? "mayorista" : "precios"}-${today()}.pdf`);
   }
+}
+
+async function downloadSaleReceiptPdf(sale: SaleGroup, products: Product[], location: string) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const receiptNumber = sale.id.replace(/[^a-zA-Z0-9]/g, "").slice(-8).toUpperCase();
+
+  // Top header color accent bar (Teal)
+  doc.setFillColor(13, 148, 136);
+  doc.rect(0, 0, pageWidth, 6, "F");
+
+  // Logo / Business name
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(24);
+  doc.text("Mates x Vos", 40, 48);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Mates, bombillas y accesorios premium", 40, 62);
+
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Instagram: @matesxvos", pageWidth - 180, 38);
+  doc.text("WhatsApp: +54 9 353 479-6992", pageWidth - 180, 50);
+  doc.text(`Ubicación: ${location}`, pageWidth - 180, 62);
+
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(1);
+  doc.line(40, 76, pageWidth - 40, 76);
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("COMPROBANTE DE VENTA", 40, 98);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`N° ${receiptNumber}`, 40, 113);
+  doc.text(`Fecha: ${sale.date}`, pageWidth - 180, 98);
+  doc.text(
+    `${sale.status === "encargado" ? "Encargado" : "Entregado"} · ${sale.paymentStatus === "pagado" ? "Pagado" : "No pagado"}`,
+    pageWidth - 180,
+    113,
+  );
+
+  const infoY = 138;
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(40, infoY, pageWidth - 80, 56, 6, 6, "FD");
+
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Cliente", 56, infoY + 18);
+  doc.text("Vendedor", 56, infoY + 38);
+  doc.text("Forma de pago", pageWidth / 2 + 10, infoY + 18);
+  doc.text("Ubicación", pageWidth / 2 + 10, infoY + 38);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(sale.customer?.trim() || "Consumidor final", 56, infoY + 30);
+  doc.text(sale.seller || "-", 56, infoY + 50);
+  doc.text(sale.payment || "-", pageWidth / 2 + 10, infoY + 30);
+  doc.text(location, pageWidth / 2 + 10, infoY + 50);
+
+  const startY = infoY + 76;
+  const bodyData = sale.movements.map((movement) => {
+    const product = products.find((item) => item.id === movement.productId);
+    const quantity = movement.quantity ?? 1;
+    return [
+      product?.name ?? saleProductLabel(movement, products),
+      String(quantity),
+      currency(saleUnitPrice(movement)),
+      currency(movement.amount),
+    ];
+  });
+
+  autoTable(doc, {
+    startY,
+    head: [["Producto", "Cant.", "Precio unit.", "Subtotal"]],
+    body: bodyData,
+    margin: { left: 40, right: 40 },
+    theme: "striped",
+    styles: {
+      cellPadding: 8,
+      font: "helvetica",
+      fontSize: 10,
+      lineColor: [241, 245, 249],
+      lineWidth: 0.5,
+      textColor: [51, 65, 85],
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: [15, 23, 42],
+      fontStyle: "bold",
+      textColor: [255, 255, 255],
+      fontSize: 10,
+    },
+    columnStyles: {
+      0: { cellWidth: "auto" },
+      1: { cellWidth: 60, halign: "center" },
+      2: { cellWidth: 100, halign: "right" },
+      3: { cellWidth: 100, halign: "right", fontStyle: "bold" },
+    },
+    didDrawPage: (data: any) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.text("Comprobante interno, no válido como factura. Gracias por tu compra.", 40, pageHeight - 25);
+      doc.text(`Página ${data.pageNumber}`, pageWidth - 70, pageHeight - 25);
+    },
+  });
+
+  const finalY = (doc as any).lastAutoTable.finalY || startY;
+
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(204, 251, 241);
+  doc.rect(pageWidth - 220, finalY + 15, 180, 40, "FD");
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("TOTAL:", pageWidth - 210, finalY + 28);
+  doc.setTextColor(13, 148, 136);
+  doc.setFontSize(14);
+  doc.text(currency(sale.amount), pageWidth - 210, finalY + 45);
+
+  doc.save(`mates-x-vos-recibo-${receiptNumber}.pdf`);
 }
 
 async function loadProductImages(products: (Product & { quantity?: number })[]) {
