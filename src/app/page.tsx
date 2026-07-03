@@ -228,7 +228,8 @@ function AppShell({
 
   useEffect(() => {
     if (!loading && storeError) {
-      notify({ type: "warning", title: "Base de datos no conectada", message: storeError });
+      const isConnectionIssue = storeError.toLowerCase().startsWith("no se pudo conectar");
+      notify({ type: "warning", title: isConnectionIssue ? "Base de datos no conectada" : "Atención", message: storeError });
     }
   }, [loading, notify, storeError]);
 
@@ -646,7 +647,7 @@ function StockView() {
                 <td className="px-4 py-3 text-slate-600">{product.brand}</td>
                 <td className="px-4 py-3"><LocationBadge location={productLocation(product)} /></td>
                 <td className="px-4 py-3">
-                  <StockEditor product={product} onSave={(stock) => void saveStock(product, stock, updateStock, notify)} />
+                  <StockEditor product={product} onSave={(stock) => saveStock(product, stock, updateStock, notify)} />
                 </td>
                 <td className="px-4 py-3 font-medium">{currency(product.cost)}</td>
                 <td className="px-4 py-3 font-medium">{currency(product.price)}</td>
@@ -690,7 +691,7 @@ function StockView() {
               <Info label="Mayorista" value={product.wholesalePrice ? currency(product.wholesalePrice) : "-"} />
             </div>
             <div className="mt-4 grid grid-cols-[1fr_auto_auto] gap-2">
-              <StockEditor product={product} onSave={(stock) => void saveStock(product, stock, updateStock, notify)} />
+              <StockEditor product={product} onSave={(stock) => saveStock(product, stock, updateStock, notify)} />
               <Button variant="secondary" size="icon" onClick={() => { setEditing(product); setModalOpen(true); }} aria-label="Editar producto">
                 <Edit3 className="h-4 w-4" />
               </Button>
@@ -713,13 +714,12 @@ function StockView() {
           setEditing(null);
         }}
         onSubmit={async (values) => {
-          if (editing) {
-            await updateProduct(editing.id, values);
-            notify({ type: "success", title: "Producto actualizado", message: values.name });
-          } else {
-            await addProduct(values);
-            notify({ type: "success", title: "Producto creado", message: values.name });
+          const ok = editing ? await updateProduct(editing.id, values) : await addProduct(values);
+          if (!ok) {
+            notify({ type: "error", title: editing ? "No se pudo actualizar el producto" : "No se pudo crear el producto", message: values.name });
+            return;
           }
+          notify({ type: "success", title: editing ? "Producto actualizado" : "Producto creado", message: values.name });
           setModalOpen(false);
           setEditing(null);
         }}
@@ -929,7 +929,8 @@ function SalesView() {
         paymentStatus,
       });
       if (!ok) {
-        notify({ type: "warning", title: "No hay stock suficiente para completar la venta" });
+        const detail = useStockStore.getState().error;
+        notify({ type: "warning", title: "No se pudo completar la venta", message: detail || "Revisá el stock disponible." });
         return;
       }
 
@@ -951,12 +952,20 @@ function SalesView() {
   }
 
   async function changeSaleStatus(sale: SaleGroup, nextStatus: SaleStatus) {
-    await updateSaleStatus(sale.ids, nextStatus);
+    const ok = await updateSaleStatus(sale.ids, nextStatus);
+    if (!ok) {
+      notify({ type: "error", title: "No se pudo actualizar el estado" });
+      return;
+    }
     notify({ type: "success", title: "Estado actualizado", message: nextStatus === "encargado" ? "Encargado" : "Entregado" });
   }
 
   async function changeSalePaymentStatus(sale: SaleGroup, nextPaymentStatus: SalePaymentStatus) {
-    await updateSalePaymentStatus(sale.ids, nextPaymentStatus);
+    const ok = await updateSalePaymentStatus(sale.ids, nextPaymentStatus);
+    if (!ok) {
+      notify({ type: "error", title: "No se pudo actualizar el cobro" });
+      return;
+    }
     notify({
       type: "success",
       title: "Pago actualizado",
@@ -1316,7 +1325,11 @@ function StockLoadTab() {
     try {
       const quantityValue = toPositiveInteger(quantity);
       const costValue = toPositiveNumber(unitCost);
-      await registerPurchase({ productId, quantity: quantityValue, unitCost: costValue, date });
+      const ok = await registerPurchase({ productId, quantity: quantityValue, unitCost: costValue, date });
+      if (!ok) {
+        notify({ type: "error", title: "No se pudo cargar el stock", message: selected?.name });
+        return;
+      }
       notify({ type: "success", title: "Stock actualizado", message: selected?.name });
     } finally {
       submittingRef.current = false;
@@ -1985,17 +1998,19 @@ function StockPill({ product }: { product: Product }) {
   );
 }
 
-function StockEditor({ product, onSave }: { product: Product; onSave: (stock: number) => void }) {
+function StockEditor({ product, onSave }: { product: Product; onSave: (stock: number) => Promise<boolean> }) {
   const [value, setValue] = useState(String(product.stock));
 
   useEffect(() => {
     setValue(String(product.stock));
   }, [product.stock]);
 
-  function commitStock() {
+  async function commitStock() {
     const nextStock = toNonNegativeInteger(value);
     setValue(String(nextStock));
-    if (nextStock !== product.stock) onSave(nextStock);
+    if (nextStock === product.stock) return;
+    const ok = await onSave(nextStock);
+    if (!ok) setValue(String(product.stock));
   }
 
   return (
@@ -2590,11 +2605,12 @@ function ErrorMessage({ text }: { text: string }) {
 }
 
 function ConnectionMessage({ text }: { text: string }) {
+  const isConnectionIssue = text.toLowerCase().startsWith("no se pudo conectar");
   return (
     <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
       <div>
-        <p className="font-medium">Base de datos no conectada</p>
+        <p className="font-medium">{isConnectionIssue ? "Base de datos no conectada" : "Atención"}</p>
         <p className="mt-1 text-amber-700">{text}</p>
       </div>
     </div>
@@ -2613,28 +2629,41 @@ function EmptyState({ title, text }: { title: string; text: string }) {
 async function saveStock(
   product: Product,
   stock: number,
-  updateStock: (id: string, stock: number) => Promise<void>,
+  updateStock: (id: string, stock: number) => Promise<boolean>,
   notify: Notify,
 ) {
-  await updateStock(product.id, stock);
+  const ok = await updateStock(product.id, stock);
+  if (!ok) {
+    notify({ type: "error", title: "No se pudo actualizar el stock", message: product.name });
+    return false;
+  }
   notify({ type: "success", title: "Stock actualizado", message: product.name });
+  return true;
 }
 
-async function confirmDelete(product: Product, deleteProduct: (id: string) => Promise<void>, notify: Notify) {
+async function confirmDelete(product: Product, deleteProduct: (id: string) => Promise<boolean>, notify: Notify) {
   const ok = window.confirm(`Eliminar ${product.name}?`);
   if (!ok) return;
-  await deleteProduct(product.id);
+  const deleted = await deleteProduct(product.id);
+  if (!deleted) {
+    notify({ type: "error", title: "No se pudo eliminar el producto", message: product.name });
+    return;
+  }
   notify({ type: "success", title: "Producto eliminado", message: product.name });
 }
 
-async function removeSale(sale: SaleGroup, deleteMovement: (ids: string[]) => Promise<void>, notify: Notify) {
+async function removeSale(sale: SaleGroup, deleteMovement: (ids: string[]) => Promise<boolean>, notify: Notify) {
   const confirmMessage =
     sale.ids.length > 1
       ? "Eliminar esta venta con varios productos? El stock se devuelve automaticamente."
       : "Eliminar esta venta? El stock se devuelve automaticamente.";
   const ok = window.confirm(confirmMessage);
   if (!ok) return;
-  await deleteMovement(sale.ids);
+  const deleted = await deleteMovement(sale.ids);
+  if (!deleted) {
+    notify({ type: "error", title: "No se pudo eliminar la venta" });
+    return;
+  }
   notify({ type: "success", title: "Venta eliminada", message: "El stock fue devuelto" });
 }
 

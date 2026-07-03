@@ -325,7 +325,7 @@ begin
       end if;
 
       if v_product.stock < v_quantity then
-        raise exception 'Stock insuficiente: %', v_product.name;
+        raise exception 'Stock insuficiente: % (disponible % u., pedido % u.)', v_product.name, v_product.stock, v_quantity;
       end if;
 
       v_unit_price := coalesce((v_item->>'unitPrice')::numeric, v_product.price);
