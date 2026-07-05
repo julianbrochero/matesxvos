@@ -6,6 +6,8 @@ import autoTable from "jspdf-autotable";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
+  ArrowDownCircle,
+  ArrowUpCircle,
   Boxes,
   CheckCircle2,
   Download,
@@ -22,6 +24,7 @@ import {
   ShoppingBag,
   Trash2,
   Upload,
+  Wallet,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,7 +37,7 @@ import { cn, currency, today } from "@/lib/utils";
 import { Movement, Product, type SaleLineInput, type SaleUpdateInput, useStockStore } from "@/lib/store";
 import { LOCATIONS, type LocationFilter, type LocationName, useLocationFilterStore } from "@/lib/location";
 
-type View = "dashboard" | "stock" | "ventas" | "listas";
+type View = "dashboard" | "stock" | "ventas" | "listas" | "caja";
 type SaleStatus = "entregado" | "encargado";
 type SaleFilter = "todos" | SaleStatus;
 type SalePaymentStatus = "pagado" | "no_pagado";
@@ -77,12 +80,13 @@ const SALE_PAYMENT_STATUSES: { id: SalePaymentStatus; label: string }[] = [
   { id: "no_pagado", label: "No pagado" },
 ];
 
-type NavAccent = "sky" | "emerald" | "amber" | "violet";
+type NavAccent = "sky" | "emerald" | "amber" | "violet" | "rose";
 
 const navItems: { id: View; label: string; short: string; icon: typeof Boxes; accent: NavAccent }[] = [
   { id: "dashboard", label: "Inicio", short: "Inicio", icon: LayoutDashboard, accent: "sky" },
   { id: "ventas", label: "Ventas", short: "Ventas", icon: ShoppingBag, accent: "emerald" },
   { id: "stock", label: "Stock", short: "Stock", icon: Boxes, accent: "amber" },
+  { id: "caja", label: "Caja", short: "Caja", icon: Wallet, accent: "rose" },
   { id: "listas", label: "Listas", short: "Listas", icon: Download, accent: "violet" },
 ];
 
@@ -91,6 +95,7 @@ const NAV_ACCENTS: Record<NavAccent, { soft: string; text: string }> = {
   emerald: { soft: "bg-emerald-50", text: "text-emerald-700" },
   amber: { soft: "bg-amber-50", text: "text-amber-700" },
   violet: { soft: "bg-violet-50", text: "text-violet-700" },
+  rose: { soft: "bg-rose-50", text: "text-rose-700" },
 };
 
 export default function Home() {
@@ -149,6 +154,7 @@ export default function Home() {
           {view === "dashboard" && <DashboardView setView={setView} />}
           {view === "stock" && <StockView />}
           {view === "ventas" && <SalesView />}
+          {view === "caja" && <CajaView />}
           {view === "listas" && <ListasView />}
         </AppShell>
       </main>
@@ -2212,6 +2218,102 @@ function QuoteBuilder() {
           </Panel>
         </div>
   );
+}
+
+function CajaView() {
+  const products = useStockStore((state) => state.products);
+  const movements = useStockStore((state) => state.movements);
+  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
+
+  const cashMovements = useMemo(
+    () =>
+      movements.filter(
+        (movement) =>
+          movement.type === "compra" || (movement.type === "venta" && movement.paymentStatus === "pagado"),
+      ),
+    [movements],
+  );
+
+  const filteredCashMovements = useMemo(
+    () => cashMovements.filter((movement) => movementMatchesLocation(movement, products, locationFilter)),
+    [cashMovements, products, locationFilter],
+  );
+
+  const balance = getCajaBalance(filteredCashMovements);
+  const balanceByLocation = LOCATIONS.map((location) => ({
+    location,
+    balance: getCajaBalance(cashMovements.filter((movement) => movementLocation(movement, products) === location)),
+  }));
+
+  const ledger = [...filteredCashMovements].sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <section className="grid gap-5">
+      <PageHeader
+        title="Caja"
+        description={
+          locationFilter === "todos"
+            ? "Dinero disponible segun ventas cobradas y compras de mercaderia."
+            : `Dinero disponible en ${locationFilter}.`
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {locationFilter === "todos" ? (
+          <>
+            <SummaryCard label="Caja total" value={currency(balance)} tone={balance >= 0 ? "ok" : "warning"} />
+            <SummaryCard
+              label="Buenos Aires"
+              value={currency(balanceByLocation[0]?.balance ?? 0)}
+              tone={(balanceByLocation[0]?.balance ?? 0) >= 0 ? "ok" : "warning"}
+            />
+            <SummaryCard
+              label="Villa Maria"
+              value={currency(balanceByLocation[1]?.balance ?? 0)}
+              tone={(balanceByLocation[1]?.balance ?? 0) >= 0 ? "ok" : "warning"}
+            />
+          </>
+        ) : (
+          <SummaryCard label={`Caja ${locationFilter}`} value={currency(balance)} tone={balance >= 0 ? "ok" : "warning"} />
+        )}
+      </div>
+
+      <Panel title="Movimientos de caja" subtitle="Ventas cobradas suman, compras de mercaderia restan.">
+        <div className="divide-y divide-slate-100">
+          {ledger.map((movement) => {
+            const isIncome = movement.type === "venta";
+            return (
+              <div key={movement.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  {isIncome ? (
+                    <ArrowUpCircle className="h-5 w-5 shrink-0 text-emerald-600" />
+                  ) : (
+                    <ArrowDownCircle className="h-5 w-5 shrink-0 text-rose-600" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{movement.title}</p>
+                    <p className="mt-1 break-words text-sm text-slate-500">{movement.detail}</p>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className={cn("font-semibold", isIncome ? "text-emerald-700" : "text-rose-700")}>
+                    {isIncome ? "+" : "-"}
+                    {currency(movement.amount)}
+                  </p>
+                  <p className="text-xs text-slate-500">{movement.date}</p>
+                </div>
+              </div>
+            );
+          })}
+          {!ledger.length ? <EmptyState title="Sin movimientos" text="Todavia no hay ventas cobradas ni compras registradas." /> : null}
+        </div>
+      </Panel>
+    </section>
+  );
+}
+
+function getCajaBalance(movements: Movement[]) {
+  return movements.reduce((sum, movement) => sum + (movement.type === "venta" ? movement.amount : -movement.amount), 0);
 }
 
 function PageHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
