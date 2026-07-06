@@ -22,6 +22,7 @@ import {
   Plus,
   Search,
   ShoppingBag,
+  SlidersHorizontal,
   Trash2,
   Upload,
   Wallet,
@@ -2223,13 +2224,19 @@ function QuoteBuilder() {
 function CajaView() {
   const products = useStockStore((state) => state.products);
   const movements = useStockStore((state) => state.movements);
+  const adjustCaja = useStockStore((state) => state.adjustCaja);
+  const deleteMovement = useStockStore((state) => state.deleteMovement);
   const locationFilter = useLocationFilterStore((state) => state.locationFilter);
+  const notify = useAlertStore((state) => state.notify);
+  const [adjustOpen, setAdjustOpen] = useState(false);
 
   const cashMovements = useMemo(
     () =>
       movements.filter(
         (movement) =>
-          movement.type === "compra" || (movement.type === "venta" && movement.paymentStatus === "pagado"),
+          movement.type === "compra" ||
+          movement.type === "ajuste" ||
+          (movement.type === "venta" && movement.paymentStatus === "pagado"),
       ),
     [movements],
   );
@@ -2246,6 +2253,18 @@ function CajaView() {
   }));
 
   const ledger = [...filteredCashMovements].sort((a, b) => b.date.localeCompare(a.date));
+  const defaultLocation = locationFilter === "todos" ? LOCATIONS[0] : locationFilter;
+
+  async function removeAdjustment(movement: Movement) {
+    const ok = window.confirm("Eliminar este ajuste de caja?");
+    if (!ok) return;
+    const deleted = await deleteMovement(movement.id);
+    if (!deleted) {
+      notify({ type: "error", title: "No se pudo eliminar el ajuste" });
+      return;
+    }
+    notify({ type: "success", title: "Ajuste eliminado" });
+  }
 
   return (
     <section className="grid gap-5">
@@ -2255,6 +2274,12 @@ function CajaView() {
           locationFilter === "todos"
             ? "Dinero disponible segun ventas cobradas y compras de mercaderia."
             : `Dinero disponible en ${locationFilter}.`
+        }
+        action={
+          <Button onClick={() => setAdjustOpen(true)}>
+            <SlidersHorizontal className="h-4 w-4" />
+            Ajustar caja
+          </Button>
         }
       />
 
@@ -2281,7 +2306,9 @@ function CajaView() {
       <Panel title="Movimientos de caja" subtitle="Ventas cobradas suman, compras de mercaderia restan.">
         <div className="divide-y divide-slate-100">
           {ledger.map((movement) => {
-            const isIncome = movement.type === "venta";
+            const effect = movement.type === "compra" ? -movement.amount : movement.amount;
+            const isIncome = effect >= 0;
+            const isAdjustment = movement.type === "ajuste";
             return (
               <div key={movement.id} className="flex items-center justify-between gap-3 py-3">
                 <div className="flex min-w-0 items-center gap-3">
@@ -2295,12 +2322,19 @@ function CajaView() {
                     <p className="mt-1 break-words text-sm text-slate-500">{movement.detail}</p>
                   </div>
                 </div>
-                <div className="shrink-0 text-right">
-                  <p className={cn("font-semibold", isIncome ? "text-emerald-700" : "text-rose-700")}>
-                    {isIncome ? "+" : "-"}
-                    {currency(movement.amount)}
-                  </p>
-                  <p className="text-xs text-slate-500">{movement.date}</p>
+                <div className="flex shrink-0 items-center gap-2">
+                  <div className="text-right">
+                    <p className={cn("font-semibold", isIncome ? "text-emerald-700" : "text-rose-700")}>
+                      {isIncome ? "+" : "-"}
+                      {currency(Math.abs(effect))}
+                    </p>
+                    <p className="text-xs text-slate-500">{movement.date}</p>
+                  </div>
+                  {isAdjustment ? (
+                    <Button variant="ghost" size="icon" onClick={() => void removeAdjustment(movement)} aria-label="Eliminar ajuste">
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             );
@@ -2308,12 +2342,107 @@ function CajaView() {
           {!ledger.length ? <EmptyState title="Sin movimientos" text="Todavia no hay ventas cobradas ni compras registradas." /> : null}
         </div>
       </Panel>
+
+      <CajaAdjustModal
+        open={adjustOpen}
+        onClose={() => setAdjustOpen(false)}
+        defaultLocation={defaultLocation}
+        balanceByLocation={balanceByLocation}
+        onSubmit={async (values) => {
+          const currentBalance = balanceByLocation.find((entry) => entry.location === values.location)?.balance ?? 0;
+          const delta = values.newBalance - currentBalance;
+          if (delta === 0) {
+            setAdjustOpen(false);
+            return;
+          }
+          const ok = await adjustCaja({ location: values.location, amount: delta, date: today(), note: values.note });
+          if (!ok) {
+            notify({ type: "error", title: "No se pudo ajustar la caja" });
+            return;
+          }
+          notify({ type: "success", title: "Caja ajustada", message: `${values.location}: ${currency(values.newBalance)}` });
+          setAdjustOpen(false);
+        }}
+      />
     </section>
   );
 }
 
 function getCajaBalance(movements: Movement[]) {
-  return movements.reduce((sum, movement) => sum + (movement.type === "venta" ? movement.amount : -movement.amount), 0);
+  return movements.reduce(
+    (sum, movement) => sum + (movement.type === "compra" ? -movement.amount : movement.amount),
+    0,
+  );
+}
+
+function CajaAdjustModal({
+  open,
+  onClose,
+  defaultLocation,
+  balanceByLocation,
+  onSubmit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  defaultLocation: LocationName;
+  balanceByLocation: { location: LocationName; balance: number }[];
+  onSubmit: (values: { location: LocationName; newBalance: number; note?: string }) => void | Promise<void>;
+}) {
+  const [location, setLocation] = useState<LocationName>(defaultLocation);
+  const [newBalance, setNewBalance] = useState("0");
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const currentBalance = balanceByLocation.find((entry) => entry.location === location)?.balance ?? 0;
+
+  useEffect(() => {
+    if (!open) return;
+    setLocation(defaultLocation);
+    setNewBalance(String(Math.round(balanceByLocation.find((entry) => entry.location === defaultLocation)?.balance ?? 0)));
+    setNote("");
+    submittingRef.current = false;
+    setSubmitting(false);
+  }, [open, defaultLocation, balanceByLocation]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const parsedBalance = Number(newBalance);
+      await onSubmit({
+        location,
+        newBalance: Number.isFinite(parsedBalance) ? parsedBalance : 0,
+        note: note.trim() || undefined,
+      });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal open={open} title="Ajustar caja" subtitle="Corrige el saldo disponible y queda registrado en el historial." onClose={onClose}>
+      <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
+        <Select label="Ubicacion" value={location} onChange={(event) => setLocation(event.target.value as LocationName)}>
+          {LOCATIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+        </Select>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+          <div className="flex justify-between">
+            <span className="text-slate-500">Saldo actual</span>
+            <span className="font-medium">{currency(currentBalance)}</span>
+          </div>
+        </div>
+        <Input label="Nuevo saldo" required type="number" value={newBalance} onChange={(event) => setNewBalance(event.target.value)} />
+        <Input label="Nota (opcional)" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Motivo del ajuste" />
+        <Button disabled={submitting}>
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlidersHorizontal className="h-4 w-4" />}
+          {submitting ? "Guardando..." : "Guardar ajuste"}
+        </Button>
+      </form>
+    </Modal>
+  );
 }
 
 function PageHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {

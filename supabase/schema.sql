@@ -73,7 +73,7 @@ $$;
 create table if not exists public.movements (
   id uuid primary key default gen_random_uuid(),
   product_id uuid references public.products(id) on delete set null,
-  type text not null check (type in ('compra', 'venta', 'stock', 'producto')),
+  type text not null check (type in ('compra', 'venta', 'stock', 'producto', 'ajuste')),
   quantity integer check (quantity is null or quantity > 0),
   status text check (status in ('pendiente', 'entregado', 'cancelado')),
   title text not null,
@@ -138,6 +138,12 @@ begin
   end if;
 end;
 $$;
+
+alter table public.movements drop constraint if exists movements_type_check;
+
+alter table public.movements
+add constraint movements_type_check
+check (type in ('compra', 'venta', 'stock', 'producto', 'ajuste'));
 
 -- Backfill: copia la ubicación actual del producto a cada movimiento existente
 -- que todavía no tenga una ubicación propia guardada.

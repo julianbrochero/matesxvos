@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
+  type CajaAdjustmentInput,
   type Movement,
   type Product,
   type ProductInput,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/domain";
 import { today } from "@/lib/utils";
 
-export type { Movement, Product, ProductInput, PurchaseInput, SaleBatchInput, SaleLineInput, SaleUpdateInput } from "@/lib/domain";
+export type { CajaAdjustmentInput, Movement, Product, ProductInput, PurchaseInput, SaleBatchInput, SaleLineInput, SaleUpdateInput } from "@/lib/domain";
 
 type BootstrapPayload = {
   products: Product[];
@@ -33,6 +34,7 @@ type StockState = {
   deleteProduct: (id: string) => Promise<boolean>;
   updateStock: (id: string, stock: number) => Promise<boolean>;
   registerPurchase: (input: PurchaseInput) => Promise<boolean>;
+  adjustCaja: (input: CajaAdjustmentInput) => Promise<boolean>;
   registerSale: (input: SaleBatchInput) => Promise<boolean>;
   updateSale: (id: string | string[], input: SaleUpdateInput) => Promise<boolean>;
   updateSaleStatus: (id: string | string[], status: NonNullable<Movement["status"]>) => Promise<boolean>;
@@ -168,6 +170,24 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
         profit: 0,
         date,
         location: product.location,
+      },
+      ...state.movements,
+    ],
+  };
+}
+
+function localAdjustCaja({ location, amount, date, note }: CajaAdjustmentInput, state: StockState) {
+  return {
+    movements: [
+      {
+        id: id("m"),
+        type: "ajuste" as const,
+        title: "Ajuste de caja",
+        detail: note?.trim() || (amount >= 0 ? `Se sumaron ${amount} a la caja` : `Se restaron ${Math.abs(amount)} de la caja`),
+        amount,
+        profit: 0,
+        date,
+        location,
       },
       ...state.movements,
     ],
@@ -480,6 +500,32 @@ export const useStockStore = create<StockState>()(
             return false;
           }
           set((state) => ({ ...localRegisterPurchase(input, state), error: error instanceof Error ? error.message : "" }));
+          return true;
+        }
+      },
+      adjustCaja: async (input) => {
+        if (!get().remote) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: DATABASE_CONNECTION_ERROR });
+            return false;
+          }
+          set((state) => localAdjustCaja(input, state));
+          return true;
+        }
+
+        try {
+          await apiRequest<{ ok: boolean }>("/api/caja/adjust", {
+            method: "POST",
+            body: JSON.stringify(input),
+          });
+          await get().hydrate();
+          return true;
+        } catch (error) {
+          if (!LOCAL_MODE_ENABLED) {
+            set({ error: remoteError(error) });
+            return false;
+          }
+          set((state) => ({ ...localAdjustCaja(input, state), error: error instanceof Error ? error.message : "" }));
           return true;
         }
       },
