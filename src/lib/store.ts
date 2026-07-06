@@ -176,7 +176,7 @@ function localRegisterPurchase({ productId, quantity, unitCost, date }: Purchase
   };
 }
 
-function localAdjustCaja({ location, amount, date, note }: CajaAdjustmentInput, state: StockState) {
+function localAdjustCaja({ amount, date, note }: CajaAdjustmentInput, state: StockState) {
   return {
     movements: [
       {
@@ -187,7 +187,6 @@ function localAdjustCaja({ location, amount, date, note }: CajaAdjustmentInput, 
         amount,
         profit: 0,
         date,
-        location,
       },
       ...state.movements,
     ],

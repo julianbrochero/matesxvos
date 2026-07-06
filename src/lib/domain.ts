@@ -35,7 +35,6 @@ export type Movement = {
 };
 
 export type CajaAdjustmentInput = {
-  location: "Buenos Aires" | "Villa Maria";
   amount: number;
   date: string;
   note?: string;

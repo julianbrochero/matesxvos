@@ -2222,11 +2222,9 @@ function QuoteBuilder() {
 }
 
 function CajaView() {
-  const products = useStockStore((state) => state.products);
   const movements = useStockStore((state) => state.movements);
   const adjustCaja = useStockStore((state) => state.adjustCaja);
   const deleteMovement = useStockStore((state) => state.deleteMovement);
-  const locationFilter = useLocationFilterStore((state) => state.locationFilter);
   const notify = useAlertStore((state) => state.notify);
   const [adjustOpen, setAdjustOpen] = useState(false);
 
@@ -2241,19 +2239,8 @@ function CajaView() {
     [movements],
   );
 
-  const filteredCashMovements = useMemo(
-    () => cashMovements.filter((movement) => movementMatchesLocation(movement, products, locationFilter)),
-    [cashMovements, products, locationFilter],
-  );
-
-  const balance = getCajaBalance(filteredCashMovements);
-  const balanceByLocation = LOCATIONS.map((location) => ({
-    location,
-    balance: getCajaBalance(cashMovements.filter((movement) => movementLocation(movement, products) === location)),
-  }));
-
-  const ledger = [...filteredCashMovements].sort((a, b) => b.date.localeCompare(a.date));
-  const defaultLocation = locationFilter === "todos" ? LOCATIONS[0] : locationFilter;
+  const balance = getCajaBalance(cashMovements);
+  const ledger = [...cashMovements].sort((a, b) => b.date.localeCompare(a.date));
 
   async function removeAdjustment(movement: Movement) {
     const ok = window.confirm("Eliminar este ajuste de caja?");
@@ -2270,11 +2257,7 @@ function CajaView() {
     <section className="grid gap-5">
       <PageHeader
         title="Caja"
-        description={
-          locationFilter === "todos"
-            ? "Dinero disponible segun ventas cobradas y compras de mercaderia."
-            : `Dinero disponible en ${locationFilter}.`
-        }
+        description="Dinero disponible en total, entre las dos sucursales. Las ventas cobradas suman y las compras de mercaderia restan."
         action={
           <Button onClick={() => setAdjustOpen(true)}>
             <SlidersHorizontal className="h-4 w-4" />
@@ -2283,24 +2266,8 @@ function CajaView() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {locationFilter === "todos" ? (
-          <>
-            <SummaryCard label="Caja total" value={currency(balance)} tone={balance >= 0 ? "ok" : "warning"} />
-            <SummaryCard
-              label="Buenos Aires"
-              value={currency(balanceByLocation[0]?.balance ?? 0)}
-              tone={(balanceByLocation[0]?.balance ?? 0) >= 0 ? "ok" : "warning"}
-            />
-            <SummaryCard
-              label="Villa Maria"
-              value={currency(balanceByLocation[1]?.balance ?? 0)}
-              tone={(balanceByLocation[1]?.balance ?? 0) >= 0 ? "ok" : "warning"}
-            />
-          </>
-        ) : (
-          <SummaryCard label={`Caja ${locationFilter}`} value={currency(balance)} tone={balance >= 0 ? "ok" : "warning"} />
-        )}
+      <div className="grid grid-cols-1 gap-3 sm:max-w-xs">
+        <SummaryCard label="Caja total" value={currency(balance)} tone={balance >= 0 ? "ok" : "warning"} />
       </div>
 
       <Panel title="Movimientos de caja" subtitle="Ventas cobradas suman, compras de mercaderia restan.">
@@ -2346,21 +2313,19 @@ function CajaView() {
       <CajaAdjustModal
         open={adjustOpen}
         onClose={() => setAdjustOpen(false)}
-        defaultLocation={defaultLocation}
-        balanceByLocation={balanceByLocation}
+        currentBalance={balance}
         onSubmit={async (values) => {
-          const currentBalance = balanceByLocation.find((entry) => entry.location === values.location)?.balance ?? 0;
-          const delta = values.newBalance - currentBalance;
+          const delta = values.newBalance - balance;
           if (delta === 0) {
             setAdjustOpen(false);
             return;
           }
-          const ok = await adjustCaja({ location: values.location, amount: delta, date: today(), note: values.note });
+          const ok = await adjustCaja({ amount: delta, date: today(), note: values.note });
           if (!ok) {
             notify({ type: "error", title: "No se pudo ajustar la caja" });
             return;
           }
-          notify({ type: "success", title: "Caja ajustada", message: `${values.location}: ${currency(values.newBalance)}` });
+          notify({ type: "success", title: "Caja ajustada", message: currency(values.newBalance) });
           setAdjustOpen(false);
         }}
       />
@@ -2378,31 +2343,26 @@ function getCajaBalance(movements: Movement[]) {
 function CajaAdjustModal({
   open,
   onClose,
-  defaultLocation,
-  balanceByLocation,
+  currentBalance,
   onSubmit,
 }: {
   open: boolean;
   onClose: () => void;
-  defaultLocation: LocationName;
-  balanceByLocation: { location: LocationName; balance: number }[];
-  onSubmit: (values: { location: LocationName; newBalance: number; note?: string }) => void | Promise<void>;
+  currentBalance: number;
+  onSubmit: (values: { newBalance: number; note?: string }) => void | Promise<void>;
 }) {
-  const [location, setLocation] = useState<LocationName>(defaultLocation);
   const [newBalance, setNewBalance] = useState("0");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
-  const currentBalance = balanceByLocation.find((entry) => entry.location === location)?.balance ?? 0;
 
   useEffect(() => {
     if (!open) return;
-    setLocation(defaultLocation);
-    setNewBalance(String(Math.round(balanceByLocation.find((entry) => entry.location === defaultLocation)?.balance ?? 0)));
+    setNewBalance(String(Math.round(currentBalance)));
     setNote("");
     submittingRef.current = false;
     setSubmitting(false);
-  }, [open, defaultLocation, balanceByLocation]);
+  }, [open, currentBalance]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -2412,7 +2372,6 @@ function CajaAdjustModal({
     try {
       const parsedBalance = Number(newBalance);
       await onSubmit({
-        location,
         newBalance: Number.isFinite(parsedBalance) ? parsedBalance : 0,
         note: note.trim() || undefined,
       });
@@ -2425,9 +2384,6 @@ function CajaAdjustModal({
   return (
     <Modal open={open} title="Ajustar caja" subtitle="Corrige el saldo disponible y queda registrado en el historial." onClose={onClose}>
       <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
-        <Select label="Ubicacion" value={location} onChange={(event) => setLocation(event.target.value as LocationName)}>
-          {LOCATIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-        </Select>
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
           <div className="flex justify-between">
             <span className="text-slate-500">Saldo actual</span>
