@@ -215,39 +215,50 @@ export function CatalogClient({ location }: { location: LocationName }) {
           {cart.length ? (
             <div className="grid gap-3">
               {cart.map((item) => (
-                <div key={item.productId} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
-                  <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                    {item.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img className="h-full w-full object-cover" src={item.imageUrl} alt={item.name} />
-                    ) : (
-                      <ImageIcon className="h-5 w-5 text-slate-400" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{item.name}</p>
-                    <p className="text-xs text-slate-500">{currency(item.price)} c/u</p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Button type="button" variant="secondary" size="icon" className="h-8 w-8" onClick={() => decrementCart(item.productId)} aria-label="Restar">
-                      <Minus className="h-3.5 w-3.5" />
-                    </Button>
-                    <span className="w-5 text-center text-sm font-medium">{item.quantity}</span>
+                <div key={item.productId} className="rounded-xl border border-slate-200 p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                      {item.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img className="h-full w-full object-cover" src={item.imageUrl} alt={item.name} />
+                      ) : (
+                        <ImageIcon className="h-5 w-5 text-slate-400" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{item.name}</p>
+                      <p className="text-xs text-slate-500">{currency(item.price)} c/u</p>
+                    </div>
                     <Button
                       type="button"
-                      variant="secondary"
+                      variant="ghost"
                       size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setCart((current) => current.map((line) => line.productId === item.productId && line.quantity < line.maxStock ? { ...line, quantity: line.quantity + 1 } : line))}
-                      aria-label="Sumar"
+                      className="h-8 w-8 shrink-0"
+                      onClick={() => removeFromCart(item.productId)}
+                      aria-label="Quitar"
                     >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Trash2 className="h-4 w-4 text-red-500" />
                     </Button>
                   </div>
-                  <p className="w-20 shrink-0 text-right text-sm font-semibold">{currency(item.price * item.quantity)}</p>
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeFromCart(item.productId)} aria-label="Quitar">
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Button type="button" variant="secondary" size="icon" className="h-8 w-8" onClick={() => decrementCart(item.productId)} aria-label="Restar">
+                        <Minus className="h-3.5 w-3.5" />
+                      </Button>
+                      <span className="w-5 text-center text-sm font-medium">{item.quantity}</span>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setCart((current) => current.map((line) => line.productId === item.productId && line.quantity < line.maxStock ? { ...line, quantity: line.quantity + 1 } : line))}
+                        aria-label="Sumar"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <p className="text-sm font-semibold">{currency(item.price * item.quantity)}</p>
+                  </div>
                 </div>
               ))}
             </div>
