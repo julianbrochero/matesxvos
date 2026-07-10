@@ -9,3 +9,4 @@ backend/.venv
 backend/stock.db
 __pycache__
 *.pyc
+*.tsbuildinfo

@@ -6,6 +6,8 @@ import autoTable from "jspdf-autotable";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
+  ArrowDownCircle,
+  ArrowUpCircle,
   Boxes,
   CheckCircle2,
   Download,
@@ -20,8 +22,10 @@ import {
   Plus,
   Search,
   ShoppingBag,
+  SlidersHorizontal,
   Trash2,
   Upload,
+  Wallet,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,7 +38,7 @@ import { cn, currency, today } from "@/lib/utils";
 import { Movement, Product, type SaleLineInput, type SaleUpdateInput, useStockStore } from "@/lib/store";
 import { LOCATIONS, type LocationFilter, type LocationName, useLocationFilterStore } from "@/lib/location";
 
-type View = "dashboard" | "stock" | "ventas" | "listas";
+type View = "dashboard" | "stock" | "ventas" | "listas" | "caja";
 type SaleStatus = "entregado" | "encargado";
 type SaleFilter = "todos" | SaleStatus;
 type SalePaymentStatus = "pagado" | "no_pagado";
@@ -77,12 +81,13 @@ const SALE_PAYMENT_STATUSES: { id: SalePaymentStatus; label: string }[] = [
   { id: "no_pagado", label: "No pagado" },
 ];
 
-type NavAccent = "sky" | "emerald" | "amber" | "violet";
+type NavAccent = "sky" | "emerald" | "amber" | "violet" | "rose";
 
 const navItems: { id: View; label: string; short: string; icon: typeof Boxes; accent: NavAccent }[] = [
   { id: "dashboard", label: "Inicio", short: "Inicio", icon: LayoutDashboard, accent: "sky" },
   { id: "ventas", label: "Ventas", short: "Ventas", icon: ShoppingBag, accent: "emerald" },
   { id: "stock", label: "Stock", short: "Stock", icon: Boxes, accent: "amber" },
+  { id: "caja", label: "Caja", short: "Caja", icon: Wallet, accent: "rose" },
   { id: "listas", label: "Listas", short: "Listas", icon: Download, accent: "violet" },
 ];
 
@@ -91,6 +96,7 @@ const NAV_ACCENTS: Record<NavAccent, { soft: string; text: string }> = {
   emerald: { soft: "bg-emerald-50", text: "text-emerald-700" },
   amber: { soft: "bg-amber-50", text: "text-amber-700" },
   violet: { soft: "bg-violet-50", text: "text-violet-700" },
+  rose: { soft: "bg-rose-50", text: "text-rose-700" },
 };
 
 export default function Home() {
@@ -149,6 +155,7 @@ export default function Home() {
           {view === "dashboard" && <DashboardView setView={setView} />}
           {view === "stock" && <StockView />}
           {view === "ventas" && <SalesView />}
+          {view === "caja" && <CajaView />}
           {view === "listas" && <ListasView />}
         </AppShell>
       </main>
@@ -2250,6 +2257,186 @@ function QuoteBuilder() {
             </div>
           </Panel>
         </div>
+  );
+}
+
+function CajaView() {
+  const movements = useStockStore((state) => state.movements);
+  const adjustCaja = useStockStore((state) => state.adjustCaja);
+  const deleteMovement = useStockStore((state) => state.deleteMovement);
+  const notify = useAlertStore((state) => state.notify);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+
+  const cashMovements = useMemo(
+    () =>
+      movements.filter(
+        (movement) =>
+          movement.type === "compra" ||
+          movement.type === "ajuste" ||
+          (movement.type === "venta" && movement.paymentStatus === "pagado"),
+      ),
+    [movements],
+  );
+
+  const balance = getCajaBalance(cashMovements);
+  const ledger = [...cashMovements].sort((a, b) => b.date.localeCompare(a.date));
+
+  async function removeAdjustment(movement: Movement) {
+    const ok = window.confirm("Eliminar este ajuste de caja?");
+    if (!ok) return;
+    const deleted = await deleteMovement(movement.id);
+    if (!deleted) {
+      notify({ type: "error", title: "No se pudo eliminar el ajuste" });
+      return;
+    }
+    notify({ type: "success", title: "Ajuste eliminado" });
+  }
+
+  return (
+    <section className="grid gap-5">
+      <PageHeader
+        title="Caja"
+        description="Dinero disponible en total, entre las dos sucursales. Las ventas cobradas suman y las compras de mercaderia restan."
+        action={
+          <Button onClick={() => setAdjustOpen(true)}>
+            <SlidersHorizontal className="h-4 w-4" />
+            Ajustar caja
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-3 sm:max-w-xs">
+        <SummaryCard label="Caja total" value={currency(balance)} tone={balance >= 0 ? "ok" : "warning"} />
+      </div>
+
+      <Panel title="Movimientos de caja" subtitle="Ventas cobradas suman, compras de mercaderia restan.">
+        <div className="divide-y divide-slate-100">
+          {ledger.map((movement) => {
+            const effect = movement.type === "compra" ? -movement.amount : movement.amount;
+            const isIncome = effect >= 0;
+            const isAdjustment = movement.type === "ajuste";
+            return (
+              <div key={movement.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  {isIncome ? (
+                    <ArrowUpCircle className="h-5 w-5 shrink-0 text-emerald-600" />
+                  ) : (
+                    <ArrowDownCircle className="h-5 w-5 shrink-0 text-rose-600" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{movement.title}</p>
+                    <p className="mt-1 break-words text-sm text-slate-500">{movement.detail}</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <div className="text-right">
+                    <p className={cn("font-semibold", isIncome ? "text-emerald-700" : "text-rose-700")}>
+                      {isIncome ? "+" : "-"}
+                      {currency(Math.abs(effect))}
+                    </p>
+                    <p className="text-xs text-slate-500">{movement.date}</p>
+                  </div>
+                  {isAdjustment ? (
+                    <Button variant="ghost" size="icon" onClick={() => void removeAdjustment(movement)} aria-label="Eliminar ajuste">
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+          {!ledger.length ? <EmptyState title="Sin movimientos" text="Todavia no hay ventas cobradas ni compras registradas." /> : null}
+        </div>
+      </Panel>
+
+      <CajaAdjustModal
+        open={adjustOpen}
+        onClose={() => setAdjustOpen(false)}
+        currentBalance={balance}
+        onSubmit={async (values) => {
+          const delta = values.newBalance - balance;
+          if (delta === 0) {
+            setAdjustOpen(false);
+            return;
+          }
+          const ok = await adjustCaja({ amount: delta, date: today(), note: values.note });
+          if (!ok) {
+            notify({ type: "error", title: "No se pudo ajustar la caja" });
+            return;
+          }
+          notify({ type: "success", title: "Caja ajustada", message: currency(values.newBalance) });
+          setAdjustOpen(false);
+        }}
+      />
+    </section>
+  );
+}
+
+function getCajaBalance(movements: Movement[]) {
+  return movements.reduce(
+    (sum, movement) => sum + (movement.type === "compra" ? -movement.amount : movement.amount),
+    0,
+  );
+}
+
+function CajaAdjustModal({
+  open,
+  onClose,
+  currentBalance,
+  onSubmit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  currentBalance: number;
+  onSubmit: (values: { newBalance: number; note?: string }) => void | Promise<void>;
+}) {
+  const [newBalance, setNewBalance] = useState("0");
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setNewBalance(String(Math.round(currentBalance)));
+    setNote("");
+    submittingRef.current = false;
+    setSubmitting(false);
+  }, [open, currentBalance]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const parsedBalance = Number(newBalance);
+      await onSubmit({
+        newBalance: Number.isFinite(parsedBalance) ? parsedBalance : 0,
+        note: note.trim() || undefined,
+      });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal open={open} title="Ajustar caja" subtitle="Corrige el saldo disponible y queda registrado en el historial." onClose={onClose}>
+      <form onSubmit={submit} onKeyDown={handleFormKeyboardNavigation} className="grid gap-4">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+          <div className="flex justify-between">
+            <span className="text-slate-500">Saldo actual</span>
+            <span className="font-medium">{currency(currentBalance)}</span>
+          </div>
+        </div>
+        <Input label="Nuevo saldo" required type="number" value={newBalance} onChange={(event) => setNewBalance(event.target.value)} />
+        <Input label="Nota (opcional)" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Motivo del ajuste" />
+        <Button disabled={submitting}>
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlidersHorizontal className="h-4 w-4" />}
+          {submitting ? "Guardando..." : "Guardar ajuste"}
+        </Button>
+      </form>
+    </Modal>
   );
 }
 

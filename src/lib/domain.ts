@@ -16,7 +16,7 @@ export type Product = {
 
 export type Movement = {
   id: string;
-  type: "compra" | "venta" | "stock" | "producto";
+  type: "compra" | "venta" | "stock" | "producto" | "ajuste";
   productId?: string;
   quantity?: number;
   status?: "entregado" | "encargado";
@@ -32,6 +32,12 @@ export type Movement = {
   unitCost?: number;
   groupId?: string;
   location?: string;
+};
+
+export type CajaAdjustmentInput = {
+  amount: number;
+  date: string;
+  note?: string;
 };
 
 export type PurchaseInput = {
