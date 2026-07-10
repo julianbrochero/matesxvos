@@ -1780,50 +1780,89 @@ function RetailPriceList() {
 }
 
 function ListasView() {
-  const [activeTab, setActiveTab] = useState<"minorista" | "mayorista" | "presupuestador">("minorista");
+  const [activeTab, setActiveTab] = useState<"minorista" | "mayorista" | "presupuestador" | "catalogo">("minorista");
+  const tabs: { id: typeof activeTab; label: string }[] = [
+    { id: "minorista", label: "Minorista" },
+    { id: "mayorista", label: "Mayorista" },
+    { id: "presupuestador", label: "Armar Presupuesto" },
+    { id: "catalogo", label: "Catálogo online" },
+  ];
 
   return (
     <section className="grid gap-5">
       <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
         <PageHeader title="Listas" description="Precios minoristas, catálogo mayorista y presupuestador." />
-        <div className="flex gap-1 rounded-xl bg-slate-100 p-1 self-start sm:self-auto">
-          <button
-            type="button"
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
-              activeTab === "minorista" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
-            )}
-            onClick={() => setActiveTab("minorista")}
-          >
-            Minorista
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
-              activeTab === "mayorista" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
-            )}
-            onClick={() => setActiveTab("mayorista")}
-          >
-            Mayorista
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
-              activeTab === "presupuestador" ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
-            )}
-            onClick={() => setActiveTab("presupuestador")}
-          >
-            Armar Presupuesto
-          </button>
+        <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1 self-start sm:self-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150",
+                activeTab === tab.id ? "bg-white text-teal-700 shadow-card" : "text-slate-600 hover:text-slate-900",
+              )}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {activeTab === "minorista" && <RetailPriceList />}
       {activeTab === "mayorista" && <WholesalePriceList />}
       {activeTab === "presupuestador" && <QuoteBuilder />}
+      {activeTab === "catalogo" && <PublicCatalogLinks />}
     </section>
+  );
+}
+
+function PublicCatalogLinks() {
+  const notify = useAlertStore((state) => state.notify);
+  const catalogs: { location: LocationName; slug: string }[] = [
+    { location: "Buenos Aires", slug: "buenos-aires" },
+    { location: "Villa Maria", slug: "villa-maria" },
+  ];
+
+  async function copyLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      notify({ type: "success", title: "Link copiado", message: url });
+    } catch {
+      notify({ type: "error", title: "No pudimos copiar el link", message: url });
+    }
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      {catalogs.map(({ location, slug }) => {
+        const path = `/catalogo/${slug}`;
+        const url = typeof window !== "undefined" ? `${window.location.origin}${path}` : path;
+        return (
+          <Panel key={slug} title={`Catálogo · ${location}`} subtitle="Página pública para compartir con clientes.">
+            <div className="grid gap-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 break-all">{url}</div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="secondary" onClick={() => void copyLink(url)}>
+                  Copiar link
+                </Button>
+                <a href={path} target="_blank" rel="noreferrer">
+                  <Button type="button" variant="ghost">
+                    Abrir catálogo
+                  </Button>
+                </a>
+              </div>
+            </div>
+          </Panel>
+        );
+      })}
+      <Panel title="Cómo funciona">
+        <p className="text-sm text-slate-600">
+          Es una página pública (sin login) con los productos en stock de esa sucursal, foto y precio minorista.
+          El cliente arma su pedido con un carrito y te lo manda armado por WhatsApp, listo para confirmar.
+        </p>
+      </Panel>
+    </div>
   );
 }
 
