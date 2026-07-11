@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import NextImage from "next/image";
+import { AnimatePresence, motion } from "framer-motion";
 import { Image as ImageIcon, Loader2, Minus, MessageCircle, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,15 +122,15 @@ export function CatalogClient({ location }: { location: LocationName }) {
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#f6f5f1] pb-28 text-slate-950">
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-24 -top-32 h-72 w-72 rounded-full bg-emerald-400/40 blur-3xl" />
-        <div className="absolute -right-16 top-40 h-80 w-80 rounded-full bg-teal-400/30 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-amber-300/30 blur-3xl" />
+        <div className="absolute -left-24 -top-32 h-72 w-72 rounded-full bg-blue-400/35 blur-2xl will-change-transform" />
+        <div className="absolute -right-16 top-40 h-80 w-80 rounded-full bg-violet-400/25 blur-2xl will-change-transform" />
+        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-rose-400/25 blur-2xl will-change-transform" />
       </div>
 
       <header className="liquid-glass liquid-glass-strong sticky top-0 z-30 rounded-none">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-base font-bold text-white shadow-sm">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 to-rose-500 text-base font-bold text-white shadow-sm">
               M
             </div>
             <div className="min-w-0">
@@ -159,7 +161,7 @@ export function CatalogClient({ location }: { location: LocationName }) {
         <div className="liquid-glass relative mt-5 rounded-2xl">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
-            className="h-12 rounded-2xl border-transparent bg-transparent pl-10 shadow-none focus:ring-4 focus:ring-teal-500/10"
+            className="h-12 rounded-2xl border-transparent bg-transparent pl-10 shadow-none focus:border-blue-500/60 focus:ring-4 focus:ring-blue-500/10"
             placeholder="Buscar producto..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -201,20 +203,39 @@ export function CatalogClient({ location }: { location: LocationName }) {
         Catálogo de Mates x Vos · {location}
       </footer>
 
-      {cartCount > 0 ? (
-        <div className="liquid-glass liquid-glass-strong fixed inset-x-0 bottom-0 z-30 rounded-none p-3 sm:p-4">
-          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-            <div>
-              <p className="text-xs text-slate-500">{cartCount} {cartCount === 1 ? "producto" : "productos"}</p>
-              <p className="text-lg font-semibold tracking-tight">{currency(cartTotal)}</p>
-            </div>
-            <Button variant="glassAccent" className="rounded-full" onClick={() => setCartOpen(true)}>
-              <ShoppingBag className="h-4 w-4" />
-              Ver pedido
-            </Button>
-          </div>
+      <div className="liquid-glass liquid-glass-strong fixed inset-x-0 bottom-0 z-30 rounded-none p-3 sm:p-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+          <AnimatePresence mode="wait" initial={false}>
+            {cartCount > 0 ? (
+              <motion.div
+                key="filled"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.15 }}
+              >
+                <p className="text-xs text-slate-500">{cartCount} {cartCount === 1 ? "producto" : "productos"}</p>
+                <p className="text-lg font-semibold tracking-tight">{currency(cartTotal)}</p>
+              </motion.div>
+            ) : (
+              <motion.p
+                key="empty"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.15 }}
+                className="text-sm text-slate-500"
+              >
+                Agregá productos para armar tu pedido
+              </motion.p>
+            )}
+          </AnimatePresence>
+          <Button variant="glassAccent" className="rounded-full" disabled={cartCount === 0} onClick={() => setCartOpen(true)}>
+            <ShoppingBag className="h-4 w-4" />
+            Ver pedido
+          </Button>
         </div>
-      ) : null}
+      </div>
 
       <Modal
         open={cartOpen}
@@ -229,10 +250,9 @@ export function CatalogClient({ location }: { location: LocationName }) {
               {cart.map((item) => (
                 <div key={item.productId} className="rounded-xl border border-slate-200/70 bg-white/50 p-3">
                   <div className="flex items-start gap-3">
-                    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                    <div className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                       {item.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img className="h-full w-full object-cover" src={item.imageUrl} alt={item.name} />
+                        <NextImage src={item.imageUrl} alt={item.name} fill sizes="48px" className="object-cover" />
                       ) : (
                         <ImageIcon className="h-5 w-5 text-slate-400" />
                       )}
@@ -281,11 +301,17 @@ export function CatalogClient({ location }: { location: LocationName }) {
           {cart.length ? (
             <>
               <div className="grid gap-3 border-t border-slate-200 pt-4">
-                <Input label="Tu nombre (opcional)" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="¿Cómo te llamamos?" />
+                <Input
+                  className="focus:border-blue-500/60 focus:ring-blue-500/10"
+                  label="Tu nombre (opcional)"
+                  value={customerName}
+                  onChange={(event) => setCustomerName(event.target.value)}
+                  placeholder="¿Cómo te llamamos?"
+                />
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
                   <span>Nota (opcional)</span>
                   <textarea
-                    className="min-h-[72px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500/60 focus:ring-4 focus:ring-teal-500/10"
+                    className="min-h-[72px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500/60 focus:ring-4 focus:ring-blue-500/10"
                     value={note}
                     onChange={(event) => setNote(event.target.value)}
                     placeholder="Horario de entrega, forma de pago, etc."
@@ -334,10 +360,16 @@ function ProductCard({
 
   return (
     <article className="liquid-glass liquid-glass-shine flex flex-col overflow-hidden rounded-2xl transition-transform duration-200 hover:-translate-y-0.5">
-      <div className="grid aspect-square place-items-center overflow-hidden bg-slate-50/60">
+      <div className="relative grid aspect-square place-items-center overflow-hidden bg-slate-50/60">
         {product.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="h-full w-full object-cover" src={product.imageUrl} alt={product.name} loading="lazy" />
+          <NextImage
+            src={product.imageUrl}
+            alt={product.name}
+            fill
+            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+            className="object-cover"
+            loading="lazy"
+          />
         ) : (
           <ImageIcon className="h-8 w-8 text-slate-300" />
         )}
@@ -353,7 +385,7 @@ function ProductCard({
             <Button type="button" variant="glass" size="icon" className="h-7 w-7 rounded-full" onClick={onDecrement} aria-label="Restar">
               <Minus className="h-3.5 w-3.5" />
             </Button>
-            <span className="text-sm font-semibold text-teal-800">{quantity}</span>
+            <span className="text-sm font-semibold text-blue-700">{quantity}</span>
             <Button
               type="button"
               variant="glass"
