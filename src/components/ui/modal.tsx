@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type ModalProps = {
   open: boolean;
@@ -10,9 +11,10 @@ type ModalProps = {
   subtitle?: string;
   onClose: () => void;
   children: React.ReactNode;
+  panelClassName?: string;
 };
 
-export function Modal({ open, title, subtitle, onClose, children }: ModalProps) {
+export function Modal({ open, title, subtitle, onClose, children, panelClassName }: ModalProps) {
   return (
     <AnimatePresence>
       {open ? (
@@ -23,7 +25,10 @@ export function Modal({ open, title, subtitle, onClose, children }: ModalProps) 
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-2xl border border-slate-200/70 bg-white p-5 shadow-premium sm:p-6"
+            className={cn(
+              "max-h-[92vh] w-full max-w-2xl overflow-auto rounded-2xl border border-slate-200/70 bg-white p-5 shadow-premium sm:p-6",
+              panelClassName,
+            )}
             initial={{ y: 18, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
