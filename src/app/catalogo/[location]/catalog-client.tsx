@@ -140,7 +140,7 @@ export function CatalogClient({ location }: { location: LocationName }) {
             href={contactUrl}
             target="_blank"
             rel="noreferrer"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-500 text-white shadow-sm transition hover:bg-emerald-600"
+            className="liquid-glass-btn-accent grid h-11 w-11 shrink-0 place-items-center rounded-full"
             aria-label="Contactar por WhatsApp"
           >
             <MessageCircle className="h-5 w-5" />
@@ -208,7 +208,7 @@ export function CatalogClient({ location }: { location: LocationName }) {
               <p className="text-xs text-slate-500">{cartCount} {cartCount === 1 ? "producto" : "productos"}</p>
               <p className="text-lg font-semibold tracking-tight">{currency(cartTotal)}</p>
             </div>
-            <Button onClick={() => setCartOpen(true)}>
+            <Button variant="glassAccent" className="rounded-full" onClick={() => setCartOpen(true)}>
               <ShoppingBag className="h-4 w-4" />
               Ver pedido
             </Button>
@@ -243,9 +243,9 @@ export function CatalogClient({ location }: { location: LocationName }) {
                     </div>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="glass"
                       size="icon"
-                      className="h-8 w-8 shrink-0"
+                      className="h-8 w-8 shrink-0 rounded-full"
                       onClick={() => removeFromCart(item.productId)}
                       aria-label="Quitar"
                     >
@@ -254,15 +254,15 @@ export function CatalogClient({ location }: { location: LocationName }) {
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
-                      <Button type="button" variant="secondary" size="icon" className="h-8 w-8" onClick={() => decrementCart(item.productId)} aria-label="Restar">
+                      <Button type="button" variant="glass" size="icon" className="h-8 w-8 rounded-full" onClick={() => decrementCart(item.productId)} aria-label="Restar">
                         <Minus className="h-3.5 w-3.5" />
                       </Button>
                       <span className="w-5 text-center text-sm font-medium">{item.quantity}</span>
                       <Button
                         type="button"
-                        variant="secondary"
+                        variant="glass"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 rounded-full"
                         onClick={() => setCart((current) => current.map((line) => line.productId === item.productId && line.quantity < line.maxStock ? { ...line, quantity: line.quantity + 1 } : line))}
                         aria-label="Sumar"
                       >
@@ -303,7 +303,7 @@ export function CatalogClient({ location }: { location: LocationName }) {
                 target="_blank"
                 rel="noreferrer"
                 className={cn(
-                  "inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700",
+                  "liquid-glass-btn-accent inline-flex h-12 w-full items-center justify-center gap-2 rounded-full text-sm font-semibold",
                 )}
               >
                 <MessageCircle className="h-4 w-4" />
@@ -349,16 +349,16 @@ function ProductCard({
           {lowStock ? <span className="text-[11px] font-medium text-amber-600">¡Últimas {product.stock}!</span> : null}
         </div>
         {quantity > 0 ? (
-          <div className="flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50 px-2 py-1.5">
-            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onDecrement} aria-label="Restar">
+          <div className="liquid-glass flex items-center justify-between rounded-full px-1.5 py-1">
+            <Button type="button" variant="glass" size="icon" className="h-7 w-7 rounded-full" onClick={onDecrement} aria-label="Restar">
               <Minus className="h-3.5 w-3.5" />
             </Button>
             <span className="text-sm font-semibold text-teal-800">{quantity}</span>
             <Button
               type="button"
-              variant="ghost"
+              variant="glass"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 rounded-full"
               onClick={onIncrement}
               disabled={quantity >= product.stock}
               aria-label="Sumar"
@@ -367,7 +367,7 @@ function ProductCard({
             </Button>
           </div>
         ) : (
-          <Button type="button" size="sm" className="w-full" onClick={onAdd}>
+          <Button type="button" variant="glassAccent" size="sm" className="w-full rounded-full" onClick={onAdd}>
             <Plus className="h-4 w-4" />
             Agregar
           </Button>

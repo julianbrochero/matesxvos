@@ -15,6 +15,8 @@ const buttonVariants = cva(
           "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
         danger:
           "bg-red-600 text-white shadow-sm hover:bg-red-700",
+        glass: "liquid-glass-btn",
+        glassAccent: "liquid-glass-btn-accent",
       },
       size: {
         default: "h-10 px-4",
