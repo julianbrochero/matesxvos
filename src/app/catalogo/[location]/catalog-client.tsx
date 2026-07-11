@@ -118,8 +118,14 @@ export function CatalogClient({ location }: { location: LocationName }) {
   const contactUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`¡Hola! Te escribo desde el catálogo de ${location} 🧉`)}`;
 
   return (
-    <div className="min-h-screen bg-[#f6f5f1] pb-28 text-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/90 backdrop-blur-md">
+    <div className="relative min-h-screen overflow-x-hidden bg-[#f6f5f1] pb-28 text-slate-950">
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -left-24 -top-32 h-72 w-72 rounded-full bg-emerald-400/40 blur-3xl" />
+        <div className="absolute -right-16 top-40 h-80 w-80 rounded-full bg-teal-400/30 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-amber-300/30 blur-3xl" />
+      </div>
+
+      <header className="liquid-glass liquid-glass-strong sticky top-0 z-30 rounded-none">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-base font-bold text-white shadow-sm">
@@ -150,10 +156,10 @@ export function CatalogClient({ location }: { location: LocationName }) {
           Instagram {INSTAGRAM_HANDLE} · WhatsApp {WHATSAPP_DISPLAY}
         </p>
 
-        <div className="relative mt-5">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <div className="liquid-glass relative mt-5 rounded-2xl">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
-            className="h-12 rounded-2xl pl-10"
+            className="h-12 rounded-2xl border-transparent bg-transparent pl-10 shadow-none focus:ring-4 focus:ring-teal-500/10"
             placeholder="Buscar producto..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -196,7 +202,7 @@ export function CatalogClient({ location }: { location: LocationName }) {
       </footer>
 
       {cartCount > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 backdrop-blur-md sm:p-4">
+        <div className="liquid-glass liquid-glass-strong fixed inset-x-0 bottom-0 z-30 rounded-none p-3 sm:p-4">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
             <div>
               <p className="text-xs text-slate-500">{cartCount} {cartCount === 1 ? "producto" : "productos"}</p>
@@ -210,12 +216,18 @@ export function CatalogClient({ location }: { location: LocationName }) {
         </div>
       ) : null}
 
-      <Modal open={cartOpen} title="Tu pedido" subtitle={`Retiro / entrega en ${location}`} onClose={() => setCartOpen(false)}>
+      <Modal
+        open={cartOpen}
+        title="Tu pedido"
+        subtitle={`Retiro / entrega en ${location}`}
+        onClose={() => setCartOpen(false)}
+        panelClassName="liquid-glass liquid-glass-strong border-white/40"
+      >
         <div className="grid gap-4">
           {cart.length ? (
             <div className="grid gap-3">
               {cart.map((item) => (
-                <div key={item.productId} className="rounded-xl border border-slate-200 p-3">
+                <div key={item.productId} className="rounded-xl border border-slate-200/70 bg-white/50 p-3">
                   <div className="flex items-start gap-3">
                     <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                       {item.imageUrl ? (
@@ -321,8 +333,8 @@ function ProductCard({
   const lowStock = product.stock <= LOW_STOCK_LIMIT;
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-card">
-      <div className="grid aspect-square place-items-center overflow-hidden bg-slate-50">
+    <article className="liquid-glass liquid-glass-shine flex flex-col overflow-hidden rounded-2xl transition-transform duration-200 hover:-translate-y-0.5">
+      <div className="grid aspect-square place-items-center overflow-hidden bg-slate-50/60">
         {product.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img className="h-full w-full object-cover" src={product.imageUrl} alt={product.name} loading="lazy" />
